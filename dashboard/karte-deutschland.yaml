@@ -1,0 +1,52 @@
+# Dashboard-Karte für die Region "Deutschland".
+#
+# Deutschland liefert keinen Sackware-Preis, dafür die Drei-Jahres-Werte —
+# die ordnen den heutigen Preis historisch ein.
+#
+# WICHTIG: Die Entitäts-IDs unten sind Beispiele. Deine tatsächlichen IDs
+# stehen unter Einstellungen → Geräte & Dienste → Pelletpreise → Gerät.
+
+type: vertical-stack
+cards:
+  - type: heading
+    heading: Pelletpreis Deutschland
+    heading_style: title
+    icon: mdi:map-marker
+    badges:
+      - type: entity
+        entity: sensor.pelletpreise_deutschland_lose_aenderung_woche
+        show_state: true
+
+  - type: tile
+    entity: sensor.pelletpreise_deutschland_lose_tonne
+    name: Bundesdurchschnitt
+    icon: mdi:tanker-truck
+    vertical: false
+
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      - type: tile
+        entity: sensor.pelletpreise_deutschland_tief_3jahre
+        name: Tief (3 J.)
+        icon: mdi:arrow-down-bold
+        vertical: true
+      - type: tile
+        entity: sensor.pelletpreise_deutschland_schnitt_3jahre
+        name: Schnitt (3 J.)
+        icon: mdi:chart-line
+        vertical: true
+      - type: tile
+        entity: sensor.pelletpreise_deutschland_hoch_3jahre
+        name: Hoch (3 J.)
+        icon: mdi:arrow-up-bold
+        vertical: true
+
+  # Siehe Anmerkung in karte-bundesland.yaml zur Wahl von `history-graph`.
+  - type: history-graph
+    title: Preisverlauf
+    hours_to_show: 240
+    entities:
+      - entity: sensor.pelletpreise_deutschland_lose_tonne
+        name: Bundesdurchschnitt

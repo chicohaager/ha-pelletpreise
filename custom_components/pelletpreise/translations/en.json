@@ -1,0 +1,51 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up pellet prices",
+        "description": "Choose the region whose market price you want to track.\n\nPrices come from heizpellets24.de and include VAT and delivery. The source quotes them for a total order of 6,000 kg.",
+        "data": {
+          "region": "Region",
+          "menge": "Order quantity"
+        },
+        "data_description": {
+          "region": "German federal states also provide a bagged-goods price; Germany provides three-year figures instead.",
+          "menge": "Only used to extrapolate the total price. It does not change the market price per tonne."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not fetch prices: {fehler}"
+    },
+    "abort": {
+      "already_configured": "This region is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Adjust pellet prices",
+        "description": "Region: {region}\n\nThe order quantity only affects the extrapolated total prices.",
+        "data": {
+          "menge": "Order quantity"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "lose_tonne": { "name": "Bulk" },
+      "lose_kg": { "name": "Bulk per kg" },
+      "lose_gesamt": { "name": "Bulk total price" },
+      "lose_aenderung_woche": { "name": "Bulk change vs. last week" },
+      "sackware_tonne": { "name": "Bagged" },
+      "sackware_kg": { "name": "Bagged per kg" },
+      "sackware_gesamt": { "name": "Bagged total price" },
+      "sackware_aenderung_woche": { "name": "Bagged change vs. last week" },
+      "tief_3jahre": { "name": "3-year low" },
+      "hoch_3jahre": { "name": "3-year high" },
+      "schnitt_3jahre": { "name": "3-year average" },
+      "differenz_3monate": { "name": "Change vs. 3 months ago" }
+    }
+  }
+}

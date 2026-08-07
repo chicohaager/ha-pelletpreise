@@ -1,0 +1,51 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pelletpreise einrichten",
+        "description": "Wähle die Region, deren Marktpreis beobachtet werden soll.\n\nDie Preise stammen von heizpellets24.de und gelten inklusive Mehrwertsteuer und Lieferung. Bezugsgröße der Quelle ist eine Gesamtabnahme von 6.000 kg.",
+        "data": {
+          "region": "Region",
+          "menge": "Bestellmenge"
+        },
+        "data_description": {
+          "region": "Für Bundesländer gibt es zusätzlich einen Preis für Sackware, für Deutschland stattdessen die Drei-Jahres-Werte.",
+          "menge": "Nur für die Hochrechnung des Gesamtpreises. Ändert den Marktpreis je Tonne nicht."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Die Preise konnten nicht abgerufen werden: {fehler}"
+    },
+    "abort": {
+      "already_configured": "Diese Region ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pelletpreise anpassen",
+        "description": "Region: {region}\n\nDie Bestellmenge wirkt sich nur auf die hochgerechneten Gesamtpreise aus.",
+        "data": {
+          "menge": "Bestellmenge"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "lose_tonne": { "name": "Lose Ware" },
+      "lose_kg": { "name": "Lose Ware pro kg" },
+      "lose_gesamt": { "name": "Lose Ware Gesamtpreis" },
+      "lose_aenderung_woche": { "name": "Lose Ware Änderung zur Vorwoche" },
+      "sackware_tonne": { "name": "Sackware" },
+      "sackware_kg": { "name": "Sackware pro kg" },
+      "sackware_gesamt": { "name": "Sackware Gesamtpreis" },
+      "sackware_aenderung_woche": { "name": "Sackware Änderung zur Vorwoche" },
+      "tief_3jahre": { "name": "Tiefstwert 3 Jahre" },
+      "hoch_3jahre": { "name": "Höchstwert 3 Jahre" },
+      "schnitt_3jahre": { "name": "Durchschnitt 3 Jahre" },
+      "differenz_3monate": { "name": "Differenz zu vor 3 Monaten" }
+    }
+  }
+}

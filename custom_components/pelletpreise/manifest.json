@@ -1,0 +1,12 @@
+{
+  "domain": "pelletpreise",
+  "name": "Pelletpreise",
+  "codeowners": ["@chicohaager"],
+  "config_flow": true,
+  "documentation": "https://github.com/chicohaager/ha-pelletpreise",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/chicohaager/ha-pelletpreise/issues",
+  "requirements": [],
+  "version": "2.0.0"
+}

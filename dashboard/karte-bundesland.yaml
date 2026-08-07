@@ -1,0 +1,62 @@
+# Dashboard-Karte für eine Bundesland-Region.
+#
+# Einsetzen: Dashboard → Bearbeiten → Karte hinzufügen → "Manuell" →
+# diesen Text einfügen.
+#
+# WICHTIG: Die Entitäts-IDs unten sind Beispiele für die Region Bayern.
+# Home Assistant vergibt die IDs abhängig vom Gerätenamen und davon, ob das
+# Gerät einem Bereich zugeordnet ist — sie können bei dir anders lauten.
+# Die tatsächlichen IDs stehen unter
+#   Einstellungen → Geräte & Dienste → Pelletpreise → Gerät → Sensoren
+# oder in den Entwicklerwerkzeugen unter "Zustände" bei der Suche nach
+# "pelletpreise".
+
+type: vertical-stack
+cards:
+  - type: heading
+    heading: Pelletpreise Bayern
+    heading_style: title
+    icon: mdi:fire
+    badges:
+      - type: entity
+        entity: sensor.pelletpreise_bayern_lose_ware_anderung_zur_vorwoche
+        show_state: true
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: tile
+        entity: sensor.pelletpreise_bayern_lose_ware
+        name: Lose Ware
+        icon: mdi:tanker-truck
+        vertical: false
+      - type: tile
+        entity: sensor.pelletpreise_bayern_sackware
+        name: Sackware
+        icon: mdi:package-variant-closed
+        vertical: false
+      - type: tile
+        entity: sensor.pelletpreise_bayern_lose_ware_gesamtpreis
+        name: Lose gesamt
+        icon: mdi:cash
+        vertical: false
+      - type: tile
+        entity: sensor.pelletpreise_bayern_sackware_gesamtpreis
+        name: Sackware gesamt
+        icon: mdi:cash
+        vertical: false
+
+  # Verlauf. Bewusst `history-graph` statt `statistic-graph`: letzterer
+  # meldete auf dem Teststand (HA 2026.8.0) einen Konfigurationsfehler — auch
+  # mit fremden Sensoren, die Ursache liegt also außerhalb dieser Integration.
+  # Wie weit die Kurve zurückreicht, hängt an der Aufbewahrungsdauer des
+  # Recorders (Standard: 10 Tage).
+  - type: history-graph
+    title: Preisverlauf
+    hours_to_show: 240
+    entities:
+      - entity: sensor.pelletpreise_bayern_lose_ware
+        name: Lose Ware
+      - entity: sensor.pelletpreise_bayern_sackware
+        name: Sackware

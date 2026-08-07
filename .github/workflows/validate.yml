@@ -1,0 +1,52 @@
+name: Validierung
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Einmal wöchentlich, damit eine Änderung an heizpellets24.de oder eine
+    # neue Home-Assistant-Version auffällt, bevor jemand ein Ticket aufmacht.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  hassfest:
+    name: Home Assistant hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@main
+        with:
+          category: integration
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install pytest
+      - run: python -m pytest tests/ -v
+
+  quelle:
+    name: Quelle noch lesbar?
+    runs-on: ubuntu-latest
+    # Prüft gegen die echte Website statt gegen die Fixtures. Schlägt fehl,
+    # sobald heizpellets24.de sein Seitenformat ändert — dann ist der Parser
+    # anzupassen, bevor Nutzer "unbekannt" in ihren Sensoren sehen.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pytest tests/test_live.py -v -m live

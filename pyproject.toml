@@ -1,0 +1,15 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Die Live-Tests gehen ins Netz und belasten eine fremde Website. Sie laufen
+# deshalb nur auf ausdrückliche Anforderung: `pytest -m live`.
+addopts = "-m 'not live'"
+markers = [
+    "live: fragt heizpellets24.de wirklich ab (braucht Internet)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
