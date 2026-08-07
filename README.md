@@ -44,6 +44,12 @@ neu starten.
 
 Benötigt **Home Assistant 2025.3 oder neuer**.
 
+> In der HACS-Übersicht steht statt des Symbols ein Platzhalter. Das ist
+> normal: HACS holt die Symbole aus dem zentralen Katalog
+> brands.home-assistant.io, in dem selbst installierte Integrationen nicht
+> stehen. Home Assistant selbst zeigt das mitgelieferte Symbol (ab 2026.3) —
+> unter *Einstellungen → Geräte & Dienste → Pelletpreise*.
+
 ## Einrichtung
 
 Im Dialog werden zwei Dinge abgefragt:
