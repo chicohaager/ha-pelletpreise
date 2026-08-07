@@ -50,11 +50,11 @@ cards:
   # Verlauf. Bewusst `history-graph` statt `statistic-graph`: letzterer
   # meldete auf dem Teststand (HA 2026.8.0) einen Konfigurationsfehler — auch
   # mit fremden Sensoren, die Ursache liegt also außerhalb dieser Integration.
-  # Wie weit die Kurve zurückreicht, hängt an der Aufbewahrungsdauer des
-  # Recorders (Standard: 10 Tage).
+  # Bei diesem Zeitraum greift Home Assistant auf die Langzeitstatistik zurück,
+  # die Kurve reicht also weiter als die Aufbewahrungsdauer des Recorders.
   - type: history-graph
     title: Preisverlauf
-    hours_to_show: 240
+    hours_to_show: 4320
     entities:
       - entity: sensor.pelletpreise_bayern_lose_ware
         name: Lose Ware

@@ -46,7 +46,7 @@ cards:
   # Siehe Anmerkung in karte-bundesland.yaml zur Wahl von `history-graph`.
   - type: history-graph
     title: Preisverlauf
-    hours_to_show: 240
+    hours_to_show: 4320
     entities:
       - entity: sensor.pelletpreise_deutschland_lose_tonne
         name: Bundesdurchschnitt
