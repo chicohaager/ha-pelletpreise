@@ -25,6 +25,10 @@ async def async_get_config_entry_diagnostics(
         "region": coordinator.region,
         "quelle": coordinator.url,
         "bestellmenge_kg": coordinator.menge,
+        # Gehört in jeden Fehlerbericht: ohne diesen Wert lässt sich ein
+        # gemeldeter Gesamtpreis nicht nachrechnen, und ein "zu hoher Preis"
+        # sähe nach einem Parser-Fehler aus, obwohl er eingetragen wurde.
+        "einblaspauschale_eur": coordinator.einblaspauschale,
         "letzter_abruf_erfolgreich": coordinator.last_update_success,
     }
     if not coordinator.last_update_success:
@@ -36,6 +40,10 @@ async def async_get_config_entry_diagnostics(
         diagnose["werte"] = {
             "lose_euro_pro_tonne": daten.lose.euro_pro_tonne,
             "lose_aenderung_prozent_woche": daten.lose.aenderung_prozent_woche,
+            # Beide Zahlen nebeneinander, damit im Ticket sofort sichtbar ist,
+            # welcher Anteil gelesen und welcher hinzugerechnet wurde.
+            "lose_warenwert_eur": daten.warenwert(daten.lose),
+            "lose_gesamt_eur": daten.gesamtpreis(daten.lose, mit_einblaspauschale=True),
             "sackware_euro_pro_tonne": (
                 daten.sackware.euro_pro_tonne if daten.sackware else None
             ),

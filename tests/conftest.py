@@ -2,10 +2,10 @@
 
 Die Integration wird hier **ohne** ihr ``__init__.py`` geladen. Das ist Absicht:
 ``__init__.py`` importiert Home Assistant, und ein Test, der eine vollständige
-HA-Installation braucht, wird in der Praxis nicht gelaufen. ``const.py`` und
-``parser.py`` kommen bewusst ohne Framework aus — genau damit die Logik, in der
-Fehler teuer sind (Preis lesen, Region zuordnen), jederzeit offline prüfbar
-bleibt.
+HA-Installation braucht, wird in der Praxis nicht gelaufen. ``const.py``,
+``parser.py`` und ``berechnung.py`` kommen bewusst ohne Framework aus — genau
+damit die Logik, in der Fehler teuer sind (Preis lesen, Region zuordnen,
+Gesamtpreis rechnen), jederzeit offline prüfbar bleibt.
 """
 
 from __future__ import annotations
@@ -23,7 +23,9 @@ _paket = types.ModuleType("pelletpreise")
 _paket.__path__ = [str(PAKET)]
 sys.modules.setdefault("pelletpreise", _paket)
 
-for _name in ("const", "parser"):
+# Reihenfolge zählt: ``berechnung`` importiert relativ aus ``const`` und
+# ``parser``, die dafür schon in sys.modules stehen müssen.
+for _name in ("const", "parser", "berechnung"):
     _pfad = PAKET / f"{_name}.py"
     if not _pfad.is_file():
         raise RuntimeError(f"Modul fehlt: {_pfad}")

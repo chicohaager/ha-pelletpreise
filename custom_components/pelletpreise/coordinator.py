@@ -11,9 +11,17 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .berechnung import (
+    berechnungstext,
+    gesamtpreis_euro,
+    pruefe_einblaspauschale,
+    warenwert_euro,
+)
 from .const import (
+    CONF_EINBLASPAUSCHALE,
     CONF_MENGE,
     CONF_REGION,
+    DEFAULT_EINBLASPAUSCHALE,
     DOMAIN,
     REGION_DEUTSCHLAND,
     REGIONEN,
@@ -61,6 +69,14 @@ class Preisdaten:
     region_name: str
     menge_kg: int
 
+    einblaspauschale_eur: float
+    """Vom Nutzer eingetragener Zuschlag je Lieferung — **kein** Wert der Quelle.
+
+    Fließt ausschließlich in den Gesamtpreis der **losen** Ware ein; die
+    Preise je Tonne und je Kilogramm bleiben davon unberührt, weil sie
+    Marktpreise der Quelle sind und keine Rechnung.
+    """
+
     lose: Preis
     sackware: Preis | None
     """Nur Bundesland-Seiten führen Sackware; für Deutschland ist es None."""
@@ -68,8 +84,17 @@ class Preisdaten:
     langfrist: Bundespreise | None
     """Nur für die Region Deutschland gefüllt."""
 
-    def gesamtpreis(self, preis: Preis) -> float:
+    def warenwert(self, preis: Preis) -> float:
+        """Der reine Warenwert der Bestellmenge, ohne jeden Zuschlag."""
+        return warenwert_euro(preis.euro_pro_tonne, self.menge_kg)
+
+    def gesamtpreis(self, preis: Preis, *, mit_einblaspauschale: bool) -> float:
         """Rechne den Referenzpreis auf die Bestellmenge hoch.
+
+        ``mit_einblaspauschale`` ist bewusst ein Pflichtargument ohne Vorgabe:
+        die Pauschale gilt nur für lose Ware, und diese Entscheidung soll an
+        jeder Aufrufstelle sichtbar getroffen werden. Ein stiller Standardwert
+        hieße, dass ein neuer Sensor die Frage versehentlich mitbeantwortet.
 
         Achtung, das ist eine **lineare Hochrechnung**, kein Angebot: die
         Quelle nennt ihren Preis für eine Gesamtabnahme von 6.000 kg. Echte
@@ -77,7 +102,18 @@ class Preisdaten:
         teurer. Der Wert taugt für die Größenordnung, nicht für die
         Kalkulation. Der Sensor sagt das in seinen Attributen dazu.
         """
-        return round(preis.euro_pro_tonne * self.menge_kg / 1000, 2)
+        return gesamtpreis_euro(
+            preis.euro_pro_tonne,
+            self.menge_kg,
+            self.einblaspauschale_eur if mit_einblaspauschale else 0.0,
+        )
+
+    def berechnung(self, *, mit_einblaspauschale: bool) -> str:
+        """Klartext zur Rechnung, für das Sensor-Attribut ``berechnung``."""
+        return berechnungstext(
+            self.menge_kg,
+            self.einblaspauschale_eur if mit_einblaspauschale else 0.0,
+        )
 
 
 async def seite_holen(session: aiohttp.ClientSession, url: str) -> str:
@@ -111,7 +147,10 @@ async def seite_holen(session: aiohttp.ClientSession, url: str) -> str:
 
 
 async def preise_abrufen(
-    session: aiohttp.ClientSession, region: str, menge_kg: int
+    session: aiohttp.ClientSession,
+    region: str,
+    menge_kg: int,
+    einblaspauschale_eur: float = DEFAULT_EINBLASPAUSCHALE,
 ) -> Preisdaten:
     """Hole und lies die Preise einer Region.
 
@@ -120,6 +159,16 @@ async def preise_abrufen(
     genau das, was später auch passiert, und nicht etwas Ähnliches.
     """
     region_name = REGIONEN.get(region, region)
+
+    # Zuerst prüfen, dann abrufen: ein unsinniger Zuschlag ist ein
+    # Konfigurationsfehler und rechtfertigt keine Anfrage an eine fremde
+    # Website. Über den Einrichtungsdialog kann er gar nicht entstehen — von
+    # Hand geänderte Einträge in .storage schon.
+    try:
+        pauschale = pruefe_einblaspauschale(einblaspauschale_eur)
+    except ValueError as err:
+        raise UpdateFailed(str(err)) from err
+
     html = await seite_holen(session, region_url(region))
 
     try:
@@ -139,6 +188,7 @@ async def preise_abrufen(
         region=region,
         region_name=region_name,
         menge_kg=menge_kg,
+        einblaspauschale_eur=pauschale,
         lose=lose,
         sackware=sackware,
         langfrist=langfrist,
@@ -161,6 +211,16 @@ class PelletpreiseCoordinator(DataUpdateCoordinator[Preisdaten]):
         self.menge: int = entry.options.get(
             CONF_MENGE, entry.data.get(CONF_MENGE, REFERENZMENGE_KG)
         )
+        # Einträge, die vor dieser Version angelegt wurden, kennen den
+        # Schlüssel nicht. Die Vorgabe 0 ergibt für sie exakt denselben
+        # Gesamtpreis wie bisher — deshalb braucht es hier keine Migration und
+        # keinen Versionssprung des Eintragsschemas.
+        self.einblaspauschale: float = float(
+            entry.options.get(
+                CONF_EINBLASPAUSCHALE,
+                entry.data.get(CONF_EINBLASPAUSCHALE, DEFAULT_EINBLASPAUSCHALE),
+            )
+        )
         self._session = session
         super().__init__(
             hass,
@@ -175,7 +235,9 @@ class PelletpreiseCoordinator(DataUpdateCoordinator[Preisdaten]):
         return region_url(self.region)
 
     async def _async_update_data(self) -> Preisdaten:
-        daten = await preise_abrufen(self._session, self.region, self.menge)
+        daten = await preise_abrufen(
+            self._session, self.region, self.menge, self.einblaspauschale
+        )
         if daten.sackware is None and self.region != REGION_DEUTSCHLAND:
             _LOGGER.debug(
                 "%s: die Seite führt derzeit keinen Sackware-Preis", self.region_name

@@ -6,11 +6,13 @@
         "description": "Choose the region whose market price you want to track.\n\nPrices come from heizpellets24.de and include VAT and delivery. The source quotes them for a total order of 6,000 kg.",
         "data": {
           "region": "Region",
-          "menge": "Order quantity"
+          "menge": "Order quantity",
+          "einblaspauschale": "Blow-in fee"
         },
         "data_description": {
           "region": "German federal states also provide a bagged-goods price; Germany provides three-year figures instead.",
-          "menge": "Only used to extrapolate the total price. It does not change the market price per tonne."
+          "menge": "Only used to extrapolate the total price. It does not change the market price per tonne.",
+          "einblaspauschale": "What your supplier charges per delivery for blowing the pellets in. It is added to the bulk total price only — the source quotes its prices \"plus blow-in fee\" without naming an amount. Leave at 0 to ignore it."
         }
       }
     },
@@ -25,9 +27,14 @@
     "step": {
       "init": {
         "title": "Adjust pellet prices",
-        "description": "Region: {region}\n\nThe order quantity only affects the extrapolated total prices.",
+        "description": "Region: {region}\n\nOrder quantity and blow-in fee only affect the extrapolated total prices, not the market price per tonne.",
         "data": {
-          "menge": "Order quantity"
+          "menge": "Order quantity",
+          "einblaspauschale": "Blow-in fee"
+        },
+        "data_description": {
+          "menge": "Only used to extrapolate the total price. It does not change the market price per tonne.",
+          "einblaspauschale": "Surcharge per delivery, bulk goods only. Bagged pellets are delivered on pallets and are not blown in."
         }
       }
     }

@@ -25,6 +25,7 @@ from .const import (
     DOMAIN,
     passt_zur_region,
 )
+from .berechnung import euro
 from .coordinator import PelletpreiseCoordinator, Preisdaten
 from .parser import REFERENZMENGE_KG
 
@@ -58,17 +59,41 @@ class PelletpreisSensorDescription(SensorEntityDescription):
     zusatzattribute: Callable[[Preisdaten], dict[str, Any]] | None = None
 
 
-def _hochrechnungs_hinweis(daten: Preisdaten) -> dict[str, Any]:
-    """Sagt bei hochgerechneten Werten dazu, dass sie hochgerechnet sind."""
+def _lose_gesamt_attribute(daten: Preisdaten) -> dict[str, Any]:
+    """Zerlegt den Gesamtpreis der losen Ware in seine beiden Bestandteile.
+
+    Der Warenwert steht hier getrennt neben der Pauschale, damit im Sensor
+    nachvollziehbar bleibt, welcher Teil von heizpellets24.de gelesen und
+    welcher selbst eingetragen wurde. Ohne diese Trennung wäre die eigene
+    Zahl im Zustandswert nicht mehr von einem Marktwert zu unterscheiden.
+    """
     return {
         "bestellmenge_kg": daten.menge_kg,
-        "berechnung": (
-            f"Referenzpreis × {daten.menge_kg} kg ÷ 1000 — lineare "
-            f"Hochrechnung. Die Quelle nennt ihren Preis für "
-            f"{REFERENZMENGE_KG} kg Gesamtabnahme; tatsächliche Angebote sind "
-            "mengenabhängig."
-        ),
+        "warenwert_eur": daten.warenwert(daten.lose),
+        "einblaspauschale_eur": daten.einblaspauschale_eur,
+        "berechnung": daten.berechnung(mit_einblaspauschale=True),
     }
+
+
+def _sackware_gesamt_attribute(daten: Preisdaten) -> dict[str, Any]:
+    """Wie oben, nur ohne Pauschale — mit Begründung, falls eine gesetzt ist.
+
+    Sackware kommt auf Paletten und wird nicht eingeblasen. Wer eine Pauschale
+    eingetragen hat und sie hier nicht wiederfindet, soll den Grund am Sensor
+    lesen können und ihn nicht für einen Rechenfehler halten.
+    """
+    attribute: dict[str, Any] = {
+        "bestellmenge_kg": daten.menge_kg,
+        "einblaspauschale_eur": 0.0,
+        "berechnung": daten.berechnung(mit_einblaspauschale=False),
+    }
+    if daten.einblaspauschale_eur:
+        attribute["hinweis_einblaspauschale"] = (
+            f"Die eingetragene Einblaspauschale von "
+            f"{euro(daten.einblaspauschale_eur)} gilt hier nicht: Sackware "
+            "wird auf Paletten geliefert und nicht eingeblasen."
+        )
+    return attribute
 
 
 SENSOREN: tuple[PelletpreisSensorDescription, ...] = (
@@ -98,8 +123,10 @@ SENSOREN: tuple[PelletpreisSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:cash",
-        wert=lambda d: d.gesamtpreis(d.lose),
-        zusatzattribute=_hochrechnungs_hinweis,
+        # Einzige Stelle, an der eine selbst eingetragene Zahl in einen
+        # Sensorwert einfließt. Die Attribute weisen sie getrennt aus.
+        wert=lambda d: d.gesamtpreis(d.lose, mit_einblaspauschale=True),
+        zusatzattribute=_lose_gesamt_attribute,
     ),
     PelletpreisSensorDescription(
         key="lose_aenderung_woche",
@@ -139,8 +166,12 @@ SENSOREN: tuple[PelletpreisSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:cash",
-        wert=lambda d: d.gesamtpreis(d.sackware) if d.sackware else None,
-        zusatzattribute=_hochrechnungs_hinweis,
+        wert=lambda d: (
+            d.gesamtpreis(d.sackware, mit_einblaspauschale=False)
+            if d.sackware
+            else None
+        ),
+        zusatzattribute=_sackware_gesamt_attribute,
     ),
     PelletpreisSensorDescription(
         key="sackware_aenderung_woche",

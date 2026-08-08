@@ -14,7 +14,7 @@ Pro eingerichteter Region entsteht ein Gerät mit diesen Sensoren:
 | --- | --- | --- |
 | Lose Ware | €/t | alle Regionen |
 | Lose Ware pro kg | €/kg | alle Regionen |
-| Lose Ware Gesamtpreis | € | alle Regionen |
+| Lose Ware Gesamtpreis ¹ | € | alle Regionen |
 | Lose Ware Änderung zur Vorwoche | % | alle Regionen |
 | Sackware | €/t | nur Bundesländer |
 | Sackware pro kg | €/kg | nur Bundesländer |
@@ -23,9 +23,14 @@ Pro eingerichteter Region entsteht ein Gerät mit diesen Sensoren:
 | Tiefstwert / Höchstwert / Durchschnitt 3 Jahre | €/t | nur Deutschland |
 | Differenz zu vor 3 Monaten | €/t | nur Deutschland |
 
+¹ Als einziger Sensor enthält er die selbst eingetragene
+[Einblaspauschale](#einblaspauschale) — sofern eine eingetragen ist.
+
 Mehrere Regionen parallel sind möglich — einfach die Integration mehrfach
 hinzufügen. Alle Preise verstehen sich **inklusive Mehrwertsteuer und
 Lieferung**; bei loser Ware kommt herstellerseitig die Einblaspauschale hinzu.
+Die lässt sich bei der Einrichtung eintragen und fließt dann in den Sensor
+*Lose Ware Gesamtpreis* ein — siehe [Einblaspauschale](#einblaspauschale).
 
 ## Installation
 
@@ -52,19 +57,58 @@ Benötigt **Home Assistant 2025.3 oder neuer**.
 
 ## Einrichtung
 
-Im Dialog werden zwei Dinge abgefragt:
+Im Dialog werden drei Dinge abgefragt:
 
 - **Region** — „Deutschland" oder eines der 16 Bundesländer.
 - **Bestellmenge** — wirkt **ausschließlich** auf die hochgerechneten
   Gesamtpreise. Der Marktpreis je Tonne ändert sich dadurch nicht.
+- **Einblaspauschale** — was der eigene Händler je Lieferung fürs Einblasen
+  berechnet. Vorgabe 0 €.
 
-Beides lässt sich später über **Konfigurieren** am Eintrag ändern; die Menge
+Alles lässt sich später über **Konfigurieren** am Eintrag ändern; die Änderung
 wirkt sofort, ohne Neustart.
+
+### Einblaspauschale
+
+heizpellets24.de schreibt unter seine Preise: *„Preis inkl. MwSt. und Lieferung
+(lose Pellets **zzgl.** Einblaspauschale)"* — die Pauschale ist im Marktpreis
+also **nicht** enthalten, und die Quelle nennt keinen Betrag, weil er je
+Händler verschieden ist. Deshalb steht hier keine Voreinstellung außer 0: eine
+„übliche" Zahl wäre geraten und stünde am Ende ununterscheidbar im Gesamtpreis.
+
+Wer seinen Betrag einträgt, bekommt ihn **einmal je Bestellung** auf den
+Gesamtpreis der losen Ware gerechnet:
+
+| | mit 0 € | mit 45 € |
+| --- | --- | --- |
+| Lose Ware | 400,38 €/t | 400,38 €/t |
+| Lose Ware pro kg | 0,4004 €/kg | 0,4004 €/kg |
+| **Lose Ware Gesamtpreis** (6.000 kg) | **2.402,28 €** | **2.447,28 €** |
+| Sackware Gesamtpreis (6.000 kg) | 2.867,16 € | 2.867,16 € |
+
+Drei Dinge sind dabei Absicht:
+
+- **Nur der Gesamtpreis der losen Ware ändert sich.** Die Werte je Tonne und je
+  Kilogramm bleiben unangetastet — das sind Marktpreise der Quelle, keine
+  Rechnung. Wäre die Pauschale dort eingemischt, spränge der Preisverlauf,
+  sobald jemand seine Bestellmenge ändert.
+- **Sackware bekommt sie nicht.** Die kommt auf Paletten und wird nicht
+  eingeblasen. Ist eine Pauschale eingetragen, sagt der Sackware-Sensor das im
+  Attribut `hinweis_einblaspauschale` ausdrücklich dazu.
+- **Der eigene Anteil bleibt sichtbar.** Der Sensor *Lose Ware Gesamtpreis*
+  führt `warenwert_eur` und `einblaspauschale_eur` getrennt auf, und
+  `berechnung` schreibt dazu, dass die Pauschale selbst eingetragen wurde und
+  nicht von heizpellets24.de stammt.
+
+Bestehende Einrichtungen ändern sich nicht: ohne Eintrag steht die Pauschale
+auf 0, und der Gesamtpreis bleibt auf den Cent derselbe wie vorher.
 
 ## Wie genau sind die Zahlen?
 
 Diese Integration liest exakt das, was heizpellets24.de auf seinen öffentlichen
-Preisseiten anzeigt, und rechnet nichts dazu. Drei Punkte sind trotzdem wichtig:
+Preisseiten anzeigt. Dazu gerechnet wird genau eine Zahl, und nur wenn du sie
+selbst einträgst: die [Einblaspauschale](#einblaspauschale). Vier Punkte sind
+wichtig:
 
 - **Der Preis ist ein Marktdurchschnitt, kein Angebot.** Die Quelle bildet ihn
   je Region aus dem günstigsten Händlerangebot je Postleitzahl.
@@ -73,6 +117,10 @@ Preisseiten anzeigt, und rechnet nichts dazu. Drei Punkte sind trotzdem wichtig:
   mengenabhängig: kleinere Bestellungen sind je Tonne teurer. Der Sensor sagt
   das in seinen Attributen (`berechnung`) dazu — nimm die Zahl als
   Größenordnung, nicht als Kalkulation.
+- **Die Einblaspauschale ist deine Zahl, nicht die der Quelle.** Sie steht
+  deshalb im Sensor getrennt neben dem Warenwert und wird im Attribut
+  `berechnung` als eigene Eingabe benannt — damit sie später niemand für einen
+  gelesenen Marktwert hält.
 - **Feiner als Bundesland geht es nicht.** Eine Postleitzahl wird bewusst
   *nicht* abgefragt: die Quelle liefert auf ihren öffentlichen Seiten keine
   PLZ-genauen Preise, und eine PLZ, die nichts bewirkt, würde eine Genauigkeit

@@ -24,11 +24,15 @@ from homeassistant.helpers.selector import (
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .const import (
+    CONF_EINBLASPAUSCHALE,
     CONF_MENGE,
     CONF_REGION,
+    DEFAULT_EINBLASPAUSCHALE,
     DEFAULT_MENGE,
     DOMAIN,
+    MAX_EINBLASPAUSCHALE,
     MAX_MENGE,
+    MIN_EINBLASPAUSCHALE,
     MIN_MENGE,
     REGIONEN,
 )
@@ -59,6 +63,24 @@ def _mengenauswahl() -> NumberSelector:
     )
 
 
+def _pauschalenauswahl() -> NumberSelector:
+    """Eingabefeld für die Einblaspauschale.
+
+    Schrittweite 0,01, weil Händler krumme Beträge nehmen (44,90 € ist kein
+    Sonderfall). Die Vorgabe bleibt 0 — welchen Betrag der eigene Händler
+    verlangt, steht auf dessen Angebot und nicht auf der Quellseite.
+    """
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=MIN_EINBLASPAUSCHALE,
+            max=MAX_EINBLASPAUSCHALE,
+            step=0.01,
+            mode=NumberSelectorMode.BOX,
+            unit_of_measurement="€",
+        )
+    )
+
+
 class PelletpreiseConfigFlow(ConfigFlow, domain=DOMAIN):
     """Richtet eine Region ein."""
 
@@ -72,6 +94,9 @@ class PelletpreiseConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             region = user_input[CONF_REGION]
             menge = int(user_input[CONF_MENGE])
+            pauschale = float(
+                user_input.get(CONF_EINBLASPAUSCHALE, DEFAULT_EINBLASPAUSCHALE)
+            )
 
             await self.async_set_unique_id(region)
             self._abort_if_unique_id_configured()
@@ -80,12 +105,15 @@ class PelletpreiseConfigFlow(ConfigFlow, domain=DOMAIN):
             # jeden Fehler protokolliert und den Eintrag trotzdem angelegt —
             # der Nutzer bekam eine erfolgreiche Einrichtung mit Sensoren, die
             # nie einen Wert hatten.
-            fehler = await self._abruf_pruefen(region, menge)
+            fehler = await self._abruf_pruefen(region, menge, pauschale)
             if fehler is None:
                 return self.async_create_entry(
                     title=f"Pelletpreise {REGIONEN[region]}",
                     data={CONF_REGION: region},
-                    options={CONF_MENGE: menge},
+                    options={
+                        CONF_MENGE: menge,
+                        CONF_EINBLASPAUSCHALE: pauschale,
+                    },
                 )
             errors["base"] = "cannot_connect"
             return self.async_show_form(
@@ -107,10 +135,18 @@ class PelletpreiseConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Required(
                     CONF_MENGE, default=vorgabe.get(CONF_MENGE, DEFAULT_MENGE)
                 ): _mengenauswahl(),
+                vol.Required(
+                    CONF_EINBLASPAUSCHALE,
+                    default=vorgabe.get(
+                        CONF_EINBLASPAUSCHALE, DEFAULT_EINBLASPAUSCHALE
+                    ),
+                ): _pauschalenauswahl(),
             }
         )
 
-    async def _abruf_pruefen(self, region: str, menge: int) -> str | None:
+    async def _abruf_pruefen(
+        self, region: str, menge: int, pauschale: float
+    ) -> str | None:
         """Hole die Seite einmal. Gibt die Fehlermeldung zurück, sonst None.
 
         Bewusst über dieselbe Funktion wie im laufenden Betrieb: eine
@@ -119,7 +155,7 @@ class PelletpreiseConfigFlow(ConfigFlow, domain=DOMAIN):
         """
         try:
             await preise_abrufen(
-                async_get_clientsession(self.hass), region, menge
+                async_get_clientsession(self.hass), region, menge, pauschale
             )
         except UpdateFailed as err:
             return str(err)
@@ -134,7 +170,7 @@ class PelletpreiseConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class PelletpreiseOptionsFlow(OptionsFlow):
-    """Ändert die Bestellmenge eines bestehenden Eintrags.
+    """Ändert Bestellmenge und Einblaspauschale eines bestehenden Eintrags.
 
     Wichtig: hier wird `self.config_entry` **nicht** zugewiesen. Seit
     Home Assistant 2024.11 ist das eine Property ohne Setter; die
@@ -148,17 +184,35 @@ class PelletpreiseOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(
-                data={CONF_MENGE: int(user_input[CONF_MENGE])}
+                data={
+                    CONF_MENGE: int(user_input[CONF_MENGE]),
+                    CONF_EINBLASPAUSCHALE: float(
+                        user_input.get(
+                            CONF_EINBLASPAUSCHALE, DEFAULT_EINBLASPAUSCHALE
+                        )
+                    ),
+                }
             )
 
         aktuelle_menge = self.config_entry.options.get(
             CONF_MENGE, self.config_entry.data.get(CONF_MENGE, DEFAULT_MENGE)
+        )
+        # Bestehende Einträge kennen den Schlüssel nicht — dann steht hier 0,
+        # und am Gesamtpreis ändert sich nichts, solange nichts eingetragen wird.
+        aktuelle_pauschale = self.config_entry.options.get(
+            CONF_EINBLASPAUSCHALE,
+            self.config_entry.data.get(
+                CONF_EINBLASPAUSCHALE, DEFAULT_EINBLASPAUSCHALE
+            ),
         )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_MENGE, default=aktuelle_menge): _mengenauswahl(),
+                    vol.Required(
+                        CONF_EINBLASPAUSCHALE, default=aktuelle_pauschale
+                    ): _pauschalenauswahl(),
                 }
             ),
             description_placeholders={

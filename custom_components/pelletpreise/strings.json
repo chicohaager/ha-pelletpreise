@@ -6,11 +6,13 @@
         "description": "Wähle die Region, deren Marktpreis beobachtet werden soll.\n\nDie Preise stammen von heizpellets24.de und gelten inklusive Mehrwertsteuer und Lieferung. Bezugsgröße der Quelle ist eine Gesamtabnahme von 6.000 kg.",
         "data": {
           "region": "Region",
-          "menge": "Bestellmenge"
+          "menge": "Bestellmenge",
+          "einblaspauschale": "Einblaspauschale"
         },
         "data_description": {
           "region": "Für Bundesländer gibt es zusätzlich einen Preis für Sackware, für Deutschland stattdessen die Drei-Jahres-Werte.",
-          "menge": "Nur für die Hochrechnung des Gesamtpreises. Ändert den Marktpreis je Tonne nicht."
+          "menge": "Nur für die Hochrechnung des Gesamtpreises. Ändert den Marktpreis je Tonne nicht.",
+          "einblaspauschale": "Was dein Händler je Lieferung fürs Einblasen berechnet. Kommt nur beim Gesamtpreis der losen Ware oben drauf — die Quelle nennt ihre Preise „zzgl. Einblaspauschale\" und lässt die Höhe offen. 0 lassen, wenn du sie nicht mitrechnen willst."
         }
       }
     },
@@ -25,9 +27,14 @@
     "step": {
       "init": {
         "title": "Pelletpreise anpassen",
-        "description": "Region: {region}\n\nDie Bestellmenge wirkt sich nur auf die hochgerechneten Gesamtpreise aus.",
+        "description": "Region: {region}\n\nBestellmenge und Einblaspauschale wirken sich nur auf die hochgerechneten Gesamtpreise aus, nicht auf den Marktpreis je Tonne.",
         "data": {
-          "menge": "Bestellmenge"
+          "menge": "Bestellmenge",
+          "einblaspauschale": "Einblaspauschale"
+        },
+        "data_description": {
+          "menge": "Nur für die Hochrechnung des Gesamtpreises. Ändert den Marktpreis je Tonne nicht.",
+          "einblaspauschale": "Zuschlag je Lieferung, nur für lose Ware. Sackware wird auf Paletten geliefert und nicht eingeblasen."
         }
       }
     }

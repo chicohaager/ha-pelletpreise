@@ -9,6 +9,7 @@ DOMAIN: Final = "pelletpreise"
 # Konfigurationsschlüssel
 CONF_REGION: Final = "region"
 CONF_MENGE: Final = "menge"
+CONF_EINBLASPAUSCHALE: Final = "einblaspauschale"
 
 # Auswahlmöglichkeiten für die Region.
 #
@@ -51,6 +52,19 @@ REGIONEN: Final[dict[str, str]] = {
 DEFAULT_MENGE: Final = 6000  # entspricht der Bezugsmenge der Quelle
 MIN_MENGE: Final = 500
 MAX_MENGE: Final = 30000
+
+# Einblaspauschale, die der Händler je Lieferung berechnet.
+#
+# Vorgabe 0: die Quelle nennt keinen solchen Betrag — sie schreibt unter ihrem
+# Preis ausdrücklich "lose Pellets zzgl. Einblaspauschale" und lässt die Höhe
+# offen, weil sie je Händler verschieden ist. Ein hier voreingestellter
+# "üblicher" Wert wäre geraten und stünde am Ende als Zahl im Gesamtpreis.
+# Lieber 0 und sichtbar leer als ein plausibel aussehender Erfindungswert.
+DEFAULT_EINBLASPAUSCHALE: Final = 0.0
+MIN_EINBLASPAUSCHALE: Final = 0.0
+# Obergrenze als Tippfehlersperre, nicht als Marktaussage: sie soll ein
+# verrutschtes Komma abfangen, bevor es unbemerkt im Gesamtpreis landet.
+MAX_EINBLASPAUSCHALE: Final = 500.0
 
 # Abrufintervall. Die Quelle aktualisiert einmal täglich; häufigeres Abrufen
 # brächte keine neuen Daten und belastete eine fremde Website ohne Nutzen.
