@@ -5,4 +5,4 @@ __pycache__/
 .venv/
 _original/
 docs/.tmp/
-docs/forum-beitrag.md
+docs/forum-beitrag*.md

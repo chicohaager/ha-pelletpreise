@@ -198,12 +198,20 @@ angezeigt — ein falscher Preis wäre schlimmer als gar keiner.
 
 Fertige Karten zum Einfügen liegen unter [`dashboard/`](dashboard/):
 
-- [`karte-bundesland.yaml`](dashboard/karte-bundesland.yaml) — lose Ware und Sackware nebeneinander
-- [`karte-deutschland.yaml`](dashboard/karte-deutschland.yaml) — Bundesdurchschnitt mit Drei-Jahres-Einordnung
+- [`karte-bundesland.yaml`](dashboard/karte-bundesland.yaml) — lose Ware und Sackware, dazu die beobachteten Extremwerte
+- [`karte-deutschland.yaml`](dashboard/karte-deutschland.yaml) — Bundesdurchschnitt, Drei-Jahres-Einordnung und Bundesland-Vergleich
 
-Die Entitäts-IDs darin sind **Beispiele**. Home Assistant vergibt sie abhängig
-vom Gerätenamen und davon, ob das Gerät einem Bereich zugeordnet ist. Die
-eigenen IDs stehen unter *Einstellungen → Geräte & Dienste → Pelletpreise →
+Die Entitäts-IDs darin sind **Beispiele**. Home Assistant bildet sie bei der
+**ersten** Registrierung aus dem übersetzten Sensornamen und ändert sie danach
+nie wieder. Zwei Abweichungen sind deshalb normal:
+
+- Ältere Einrichtungen behalten die Namen von damals — dort kann derselbe
+  Sensor `sensor.pelletpreise_deutschland_lose_tonne` heißen, wo eine heute
+  angelegte Installation `sensor.pelletpreise_deutschland_lose_ware` hat.
+- Ist das Gerät einem Bereich zugeordnet, steht dessen Name vorn:
+  `sensor.sonstiges_pelletpreise_deutschland_lose_ware`.
+
+Die eigenen IDs stehen unter *Einstellungen → Geräte & Dienste → Pelletpreise →
 Gerät* oder in den Entwicklerwerkzeugen unter *Zustände*.
 
 Der Preisverlauf füllt sich erst mit der Zeit und reicht nur so weit zurück,
