@@ -23,9 +23,10 @@ _paket = types.ModuleType("pelletpreise")
 _paket.__path__ = [str(PAKET)]
 sys.modules.setdefault("pelletpreise", _paket)
 
-# Reihenfolge zählt: ``berechnung`` importiert relativ aus ``const`` und
-# ``parser``, die dafür schon in sys.modules stehen müssen.
-for _name in ("const", "parser", "berechnung"):
+# Reihenfolge zählt: ``berechnung``, ``extremwerte`` und ``vergleich``
+# importieren relativ aus ``const`` bzw. ``parser``, die dafür schon in
+# sys.modules stehen müssen.
+for _name in ("const", "parser", "berechnung", "extremwerte", "vergleich"):
     _pfad = PAKET / f"{_name}.py"
     if not _pfad.is_file():
         raise RuntimeError(f"Modul fehlt: {_pfad}")

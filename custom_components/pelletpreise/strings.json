@@ -30,13 +30,21 @@
         "description": "Region: {region}\n\nBestellmenge und Einblaspauschale wirken sich nur auf die hochgerechneten Gesamtpreise aus, nicht auf den Marktpreis je Tonne.",
         "data": {
           "menge": "Bestellmenge",
-          "einblaspauschale": "Einblaspauschale"
+          "einblaspauschale": "Einblaspauschale",
+          "bundesland_vergleich": "Bundesländer vergleichen"
         },
         "data_description": {
           "menge": "Nur für die Hochrechnung des Gesamtpreises. Ändert den Marktpreis je Tonne nicht.",
-          "einblaspauschale": "Zuschlag je Lieferung, nur für lose Ware. Sackware wird auf Paletten geliefert und nicht eingeblasen."
+          "einblaspauschale": "Zuschlag je Lieferung, nur für lose Ware. Sackware wird auf Paletten geliefert und nicht eingeblasen.",
+          "bundesland_vergleich": "Legt zwei Sensoren für das günstigste und das teuerste Bundesland an. Kostet je Aktualisierung 16 zusätzliche Seitenabrufe bei heizpellets24.de, weil die Deutschland-Seite die Bundesland-Tabelle nicht mitliefert. Nur für die Region Deutschland."
         }
       }
+    }
+  },
+  "services": {
+    "extremwerte_zuruecksetzen": {
+      "name": "Beobachtete Extremwerte zurücksetzen",
+      "description": "Verwirft den aufgezeichneten Tief- bzw. Höchstpreis der angesprochenen Sensoren; die Aufzeichnung beginnt beim aktuellen Preis von vorn. Gilt nur für die Sensoren mit „(beobachtet)\" im Namen."
     }
   },
   "entity": {
@@ -52,7 +60,15 @@
       "tief_3jahre": { "name": "Tiefstwert 3 Jahre" },
       "hoch_3jahre": { "name": "Höchstwert 3 Jahre" },
       "schnitt_3jahre": { "name": "Durchschnitt 3 Jahre" },
-      "differenz_3monate": { "name": "Differenz zu vor 3 Monaten" }
+      "differenz_3monate": { "name": "Differenz zu vor 3 Monaten" },
+      "lose_tief_beobachtet": { "name": "Lose Ware Tiefstpreis (beobachtet)" },
+      "lose_hoch_beobachtet": { "name": "Lose Ware Höchstpreis (beobachtet)" },
+      "sackware_tief_beobachtet": { "name": "Sackware Tiefstpreis (beobachtet)" },
+      "sackware_hoch_beobachtet": { "name": "Sackware Höchstpreis (beobachtet)" },
+      "guenstigstes_bundesland_lose": { "name": "Günstigstes Bundesland lose Ware" },
+      "teuerstes_bundesland_lose": { "name": "Teuerstes Bundesland lose Ware" },
+      "guenstigstes_bundesland_sackware": { "name": "Günstigstes Bundesland Sackware" },
+      "teuerstes_bundesland_sackware": { "name": "Teuerstes Bundesland Sackware" }
     }
   }
 }

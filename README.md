@@ -20,11 +20,18 @@ Pro eingerichteter Region entsteht ein Gerät mit diesen Sensoren:
 | Sackware pro kg | €/kg | nur Bundesländer |
 | Sackware Gesamtpreis | € | nur Bundesländer |
 | Sackware Änderung zur Vorwoche | % | nur Bundesländer |
+| Lose Ware Tiefstpreis / Höchstpreis (beobachtet) ² | €/t | alle Regionen |
+| Sackware Tiefstpreis / Höchstpreis (beobachtet) ² | €/t | nur Bundesländer |
 | Tiefstwert / Höchstwert / Durchschnitt 3 Jahre | €/t | nur Deutschland |
 | Differenz zu vor 3 Monaten | €/t | nur Deutschland |
+| Günstigstes / teuerstes Bundesland (lose, Sackware) ³ | €/t | nur Deutschland |
 
 ¹ Als einziger Sensor enthält er die selbst eingetragene
 [Einblaspauschale](#einblaspauschale) — sofern eine eingetragen ist.
+² Eigene Aufzeichnung dieser Installation, keine Angabe der Quelle — siehe
+[Tiefst- und Höchstpreise](#tiefst--und-höchstpreise).
+³ Muss unter *Konfigurieren* eingeschaltet werden — siehe
+[Bundesländer vergleichen](#bundesländer-vergleichen).
 
 Mehrere Regionen parallel sind möglich — einfach die Integration mehrfach
 hinzufügen. Alle Preise verstehen sich **inklusive Mehrwertsteuer und
@@ -66,7 +73,8 @@ Im Dialog werden drei Dinge abgefragt:
   berechnet. Vorgabe 0 €.
 
 Alles lässt sich später über **Konfigurieren** am Eintrag ändern; die Änderung
-wirkt sofort, ohne Neustart.
+wirkt sofort, ohne Neustart. Im Eintrag für Deutschland steht dort zusätzlich
+der Schalter [Bundesländer vergleichen](#bundesländer-vergleichen).
 
 ### Einblaspauschale
 
@@ -102,6 +110,61 @@ Drei Dinge sind dabei Absicht:
 
 Bestehende Einrichtungen ändern sich nicht: ohne Eintrag steht die Pauschale
 auf 0, und der Gesamtpreis bleibt auf den Cent derselbe wie vorher.
+
+## Tiefst- und Höchstpreise
+
+Die Sensoren mit **(beobachtet)** halten den niedrigsten und den höchsten
+Preis fest, den *diese Installation selbst gesehen hat* — je Region und
+getrennt für lose Ware und Sackware. Sie kosten keinen zusätzlichen Abruf und
+sind ab der Einrichtung da.
+
+Wichtig ist, was sie **nicht** sind: eine Angabe von heizpellets24.de. Die
+Quelle führt Tief- und Höchstwerte ausschließlich auf ihrer Deutschland-Seite
+und nur über drei Jahre; für die Bundesländer gibt es dort nichts dergleichen
+(nachgemessen — der Live-Test
+`test_die_bundeslandseiten_fuehren_keine_langfristwerte` prüft genau das, mit
+der Deutschland-Seite als Gegenprobe). Deshalb steht „(beobachtet)" im Namen
+und in den Attributen:
+
+- `beobachtet_seit` — seit wann aufgezeichnet wird. Ohne diese Angabe ist der
+  Wert nicht deutbar: 380 €/t nach drei Tagen heißt etwas anderes als 380 €/t
+  nach zwei Jahren.
+- `gesehen_am` — wann der Rekord **zuerst** erreicht wurde. Bleibt bei
+  gleichem Preis stehen, statt täglich mitzuwandern.
+
+Der Wert überdauert Neustarts und auch Ausfälle der Quelle. Führt die Quelle
+für ein Bundesland gerade keine Sackware, bleibt der bisherige Rekord stehen —
+er war einmal wahr und wird es nicht dadurch weniger.
+
+Zum Neuanfangen gibt es den Dienst **`pelletpreise.extremwerte_zuruecksetzen`**
+(*Entwicklerwerkzeuge → Aktionen*, oder am Sensor selbst). Er verwirft die
+Aufzeichnung der angesprochenen Sensoren und beginnt beim aktuellen Preis von
+vorn.
+
+## Bundesländer vergleichen
+
+Im Eintrag für **Deutschland** lassen sich unter *Konfigurieren* zwei
+Sensorpaare zuschalten: **günstigstes** und **teuerstes Bundesland**, je für
+lose Ware und Sackware. Der Zustand ist der Preis in €/t, das Bundesland steht
+im Attribut `bundesland` — dazu die vollständige Liste aller Länderpreise
+(`preise_je_bundesland`), die Spanne, ein etwaiger Gleichstand (`gleichauf`)
+und, bei Sackware, die Länder ohne Angebot (`ohne_angebot`).
+
+Der Vergleich ist **standardmäßig aus**, und das aus einem handfesten Grund:
+die Deutschland-Seite liefert ihre Bundesland-Tabelle nicht mit (die füllt
+JavaScript nach), also müssen alle 16 Landesseiten einzeln geholt werden. Das
+sind **16 zusätzliche Abrufe je Aktualisierung**, also 32 am Tag — Last auf
+einer fremden Website, die niemand ungefragt bekommt.
+
+Schlägt auch nur eine der 16 Seiten fehl, bleiben beide Sensoren ohne Wert und
+der Grund steht im Protokoll. „Das günstigste von 15" wäre eine Aussage über
+eine Menge, die gar nicht vollständig geprüft wurde — und sähe genauso aus wie
+das echte Ergebnis.
+
+Der Bundesdurchschnitt der Deutschland-Seite ist übrigens **nicht** der
+Mittelwert dieser 16 Werte: die Quelle bildet ihn nach eigener Angabe je
+Postleitzahl. Beide Zahlen liegen nah beieinander (am 08.08.2026: 406,51 €/t
+gegenüber 406,16 €/t), sind aber nicht dasselbe.
 
 ## Wie genau sind die Zahlen?
 
@@ -150,7 +213,9 @@ wie der Recorder Daten aufbewahrt (Standardeinstellung: 10 Tage).
 
 Alle 12 Stunden. Die Quelle aktualisiert einmal täglich — häufigeres Abrufen
 brächte keine neuen Daten und würde eine fremde Website ohne Nutzen belasten.
-Pro Region und Abruf ist es genau **eine** Anfrage.
+Pro Region und Abruf ist es genau **eine** Anfrage; nur mit eingeschaltetem
+[Bundesland-Vergleich](#bundesländer-vergleichen) kommen im Deutschland-Eintrag
+16 weitere dazu, gedrosselt auf vier gleichzeitig.
 
 Verwendet werden ausschließlich die regulären, öffentlichen Preisseiten, die
 `robots.txt` von heizpellets24.de für alle Clients freigibt. Die dort gesperrten
@@ -168,6 +233,9 @@ Integration braucht weder Zugangsdaten noch eine Adresse.
 ```bash
 python -m pytest              # Offline-Tests gegen gespeicherte Seiten
 python -m pytest -m live      # zusätzlich gegen die echte Website
+
+pip install pytest-homeassistant-custom-component   # braucht Python 3.13
+python -m pytest tests/test_sensoren_ha.py -o asyncio_mode=auto
 ```
 
 Die Offline-Tests prüfen den Parser gegen echte, abgespeicherte Seiten — die
@@ -179,6 +247,13 @@ Der Live-Test ruft alle 16 Bundesländer plus Deutschland ab und schlägt an,
 sobald sich das Seitenformat ändert. Er läuft zusätzlich wöchentlich in der
 GitHub-Action, damit so eine Änderung auffällt, bevor jemand ein Ticket
 aufmacht.
+
+Die dritte Suite (`tests/test_sensoren_ha.py`) startet ein echtes Home
+Assistant und prüft, was die beiden anderen nicht sehen können: ob die
+Entitäten überhaupt entstehen, ob der beobachtete Rekord einen Neustart
+übersteht, ob der Dienst zum Zurücksetzen greift und ob ein fehlgeschlagener
+Bundesland-Abruf wirklich zu „nicht verfügbar" führt statt zu einem
+Teilergebnis. Ohne das Zusatzpaket überspringt sie sich.
 
 ## Lizenz
 

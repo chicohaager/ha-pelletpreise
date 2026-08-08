@@ -47,6 +47,40 @@ cards:
         icon: mdi:cash
         vertical: false
 
+  # Beobachtete Extremwerte. Sie stammen nicht von heizpellets24.de, sondern
+  # aus der Aufzeichnung dieser Installation — deshalb steht "(beobachtet)"
+  # im Namen. Seit wann aufgezeichnet wird, steht im Attribut
+  # `beobachtet_seit` des jeweiligen Sensors.
+  - type: heading
+    heading: Seit Beobachtungsbeginn
+    heading_style: subtitle
+    icon: mdi:chart-timeline-variant
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: tile
+        entity: sensor.pelletpreise_bayern_lose_ware_tiefstpreis_beobachtet
+        name: Lose Tiefstpreis
+        icon: mdi:trending-down
+        vertical: false
+      - type: tile
+        entity: sensor.pelletpreise_bayern_lose_ware_hochstpreis_beobachtet
+        name: Lose Höchstpreis
+        icon: mdi:trending-up
+        vertical: false
+      - type: tile
+        entity: sensor.pelletpreise_bayern_sackware_tiefstpreis_beobachtet
+        name: Sack Tiefstpreis
+        icon: mdi:trending-down
+        vertical: false
+      - type: tile
+        entity: sensor.pelletpreise_bayern_sackware_hochstpreis_beobachtet
+        name: Sack Höchstpreis
+        icon: mdi:trending-up
+        vertical: false
+
   # Verlauf. Bewusst `history-graph` statt `statistic-graph`: letzterer
   # meldete auf dem Teststand (HA 2026.8.0) einen Konfigurationsfehler — auch
   # mit fremden Sensoren, die Ursache liegt also außerhalb dieser Integration.

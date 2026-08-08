@@ -5,6 +5,15 @@
 #
 # WICHTIG: Die Entitäts-IDs unten sind Beispiele. Deine tatsächlichen IDs
 # stehen unter Einstellungen → Geräte & Dienste → Pelletpreise → Gerät.
+#
+# Sie entstehen bei der **ersten** Registrierung aus dem übersetzten
+# Sensornamen und ändern sich danach nie wieder. Für eine heute angelegte
+# deutsche Installation heißt der Höchstwert deshalb
+# `..._hochstwert_3_jahre` — die IDs hier sind genau so abgelesen, nicht
+# geraten. Zwei Dinge können bei dir abweichen, beides gemessen und normal:
+#   * Ältere Einträge behalten die Namen von damals (z.B. `..._hoch_3jahre`).
+#   * Ist das Gerät einem Bereich zugeordnet, steht dessen Name vorn:
+#     `sensor.sonstiges_pelletpreise_deutschland_...`.
 
 type: vertical-stack
 cards:
@@ -14,11 +23,11 @@ cards:
     icon: mdi:map-marker
     badges:
       - type: entity
-        entity: sensor.pelletpreise_deutschland_lose_aenderung_woche
+        entity: sensor.pelletpreise_deutschland_lose_ware_anderung_zur_vorwoche
         show_state: true
 
   - type: tile
-    entity: sensor.pelletpreise_deutschland_lose_tonne
+    entity: sensor.pelletpreise_deutschland_lose_ware
     name: Bundesdurchschnitt
     icon: mdi:tanker-truck
     vertical: false
@@ -28,25 +37,62 @@ cards:
     square: false
     cards:
       - type: tile
-        entity: sensor.pelletpreise_deutschland_tief_3jahre
+        entity: sensor.pelletpreise_deutschland_tiefstwert_3_jahre
         name: Tief (3 J.)
         icon: mdi:arrow-down-bold
         vertical: true
       - type: tile
-        entity: sensor.pelletpreise_deutschland_schnitt_3jahre
+        entity: sensor.pelletpreise_deutschland_durchschnitt_3_jahre
         name: Schnitt (3 J.)
         icon: mdi:chart-line
         vertical: true
       - type: tile
-        entity: sensor.pelletpreise_deutschland_hoch_3jahre
+        entity: sensor.pelletpreise_deutschland_hochstwert_3_jahre
         name: Hoch (3 J.)
         icon: mdi:arrow-up-bold
         vertical: true
+
+  # Der Bundesland-Vergleich muss erst eingeschaltet werden:
+  # Einstellungen → Geräte & Dienste → Pelletpreise → Konfigurieren →
+  # "Bundesländer vergleichen". Ohne den Schalter gibt es diese beiden
+  # Entitäten gar nicht, und die Karte bliebe leer.
+  # Welches Bundesland es jeweils ist, steht im Attribut `bundesland`; die
+  # vollständige Liste in `preise_je_bundesland`.
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: tile
+        entity: sensor.pelletpreise_deutschland_gunstigstes_bundesland_lose_ware
+        name: Günstigstes Land
+        icon: mdi:map-marker-down
+        vertical: false
+      - type: tile
+        entity: sensor.pelletpreise_deutschland_teuerstes_bundesland_lose_ware
+        name: Teuerstes Land
+        icon: mdi:map-marker-up
+        vertical: false
+
+  # Eigene Aufzeichnung dieser Installation, keine Angabe der Quelle.
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: tile
+        entity: sensor.pelletpreise_deutschland_lose_ware_tiefstpreis_beobachtet
+        name: Tiefstpreis (beobachtet)
+        icon: mdi:trending-down
+        vertical: false
+      - type: tile
+        entity: sensor.pelletpreise_deutschland_lose_ware_hochstpreis_beobachtet
+        name: Höchstpreis (beobachtet)
+        icon: mdi:trending-up
+        vertical: false
 
   # Siehe Anmerkung in karte-bundesland.yaml zur Wahl von `history-graph`.
   - type: history-graph
     title: Preisverlauf
     hours_to_show: 4320
     entities:
-      - entity: sensor.pelletpreise_deutschland_lose_tonne
+      - entity: sensor.pelletpreise_deutschland_lose_ware
         name: Bundesdurchschnitt

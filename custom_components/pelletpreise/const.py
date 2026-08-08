@@ -10,6 +10,7 @@ DOMAIN: Final = "pelletpreise"
 CONF_REGION: Final = "region"
 CONF_MENGE: Final = "menge"
 CONF_EINBLASPAUSCHALE: Final = "einblaspauschale"
+CONF_BUNDESLAND_VERGLEICH: Final = "bundesland_vergleich"
 
 # Auswahlmöglichkeiten für die Region.
 #
@@ -66,11 +67,34 @@ MIN_EINBLASPAUSCHALE: Final = 0.0
 # verrutschtes Komma abfangen, bevor es unbemerkt im Gesamtpreis landet.
 MAX_EINBLASPAUSCHALE: Final = 500.0
 
+# Bundesland-Vergleich (günstigstes/teuerstes Bundesland).
+#
+# Vorgabe aus: die Deutschland-Seite liefert die Bundesland-Tabelle nicht mit,
+# der Vergleich kostet deshalb 16 zusätzliche Seitenabrufe je Aktualisierung.
+# Das ist Last auf einer fremden Website und gehört nicht ungefragt zum
+# Standardbetrieb — wer den Vergleich will, schaltet ihn ein.
+DEFAULT_BUNDESLAND_VERGLEICH: Final = False
+
+# Wie viele der 16 Seiten gleichzeitig geholt werden. Vier ist ein Kompromiss:
+# nacheinander dauerte der Abruf unnötig lange, alle 16 auf einmal wäre für
+# eine fremde Seite unhöflich.
+VERGLEICH_PARALLEL: Final = 4
+
 # Abrufintervall. Die Quelle aktualisiert einmal täglich; häufigeres Abrufen
 # brächte keine neuen Daten und belastete eine fremde Website ohne Nutzen.
 UPDATE_INTERVAL_HOURS: Final = 12
 
 ATTRIBUTION: Final = "Daten von heizpellets24.de"
+
+# Für die selbst aufgezeichneten Extremwerte gilt diese Angabe **nicht**
+# unverändert: der einzelne Preis stammt von dort, die Aussage „das ist der
+# tiefste seit …" nicht. Am Sensor stünde sonst wörtlich „Daten von
+# heizpellets24.de" direkt neben dem Hinweis „Keine Angabe von
+# heizpellets24.de" — eine Quellenangabe ist eine Behauptung über die
+# Herkunft und muss zum Wert passen, an dem sie hängt.
+ATTRIBUTION_BEOBACHTET: Final = (
+    "Preise von heizpellets24.de, Aufzeichnung durch diese Integration"
+)
 
 # Für welche Regionen ein Sensor überhaupt Daten haben kann. Die Quelle führt
 # Sackware nur auf den Bundesland-Seiten und die Langfristwerte nur auf der

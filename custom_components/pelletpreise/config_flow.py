@@ -13,6 +13,7 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -24,9 +25,11 @@ from homeassistant.helpers.selector import (
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .const import (
+    CONF_BUNDESLAND_VERGLEICH,
     CONF_EINBLASPAUSCHALE,
     CONF_MENGE,
     CONF_REGION,
+    DEFAULT_BUNDESLAND_VERGLEICH,
     DEFAULT_EINBLASPAUSCHALE,
     DEFAULT_MENGE,
     DOMAIN,
@@ -34,6 +37,7 @@ from .const import (
     MAX_MENGE,
     MIN_EINBLASPAUSCHALE,
     MIN_MENGE,
+    REGION_DEUTSCHLAND,
     REGIONEN,
 )
 from .coordinator import preise_abrufen
@@ -179,20 +183,33 @@ class PelletpreiseOptionsFlow(OptionsFlow):
     Die Basisklasse stellt den Eintrag von selbst bereit.
     """
 
+    @property
+    def _ist_deutschland(self) -> bool:
+        """Nur im Deutschland-Eintrag ergibt der Bundesland-Vergleich Sinn.
+
+        Der Schalter wird deshalb sonst gar nicht erst gezeigt: eine Option,
+        die für 16 von 17 Regionen nichts bewirkt, ist ein Versprechen, das
+        der Dialog nicht halten kann.
+        """
+        return self.config_entry.data.get(CONF_REGION) == REGION_DEUTSCHLAND
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(
-                data={
-                    CONF_MENGE: int(user_input[CONF_MENGE]),
-                    CONF_EINBLASPAUSCHALE: float(
-                        user_input.get(
-                            CONF_EINBLASPAUSCHALE, DEFAULT_EINBLASPAUSCHALE
-                        )
-                    ),
-                }
-            )
+            optionen: dict[str, Any] = {
+                CONF_MENGE: int(user_input[CONF_MENGE]),
+                CONF_EINBLASPAUSCHALE: float(
+                    user_input.get(CONF_EINBLASPAUSCHALE, DEFAULT_EINBLASPAUSCHALE)
+                ),
+            }
+            if self._ist_deutschland:
+                optionen[CONF_BUNDESLAND_VERGLEICH] = bool(
+                    user_input.get(
+                        CONF_BUNDESLAND_VERGLEICH, DEFAULT_BUNDESLAND_VERGLEICH
+                    )
+                )
+            return self.async_create_entry(data=optionen)
 
         aktuelle_menge = self.config_entry.options.get(
             CONF_MENGE, self.config_entry.data.get(CONF_MENGE, DEFAULT_MENGE)
@@ -205,16 +222,25 @@ class PelletpreiseOptionsFlow(OptionsFlow):
                 CONF_EINBLASPAUSCHALE, DEFAULT_EINBLASPAUSCHALE
             ),
         )
+        felder: dict[Any, Any] = {
+            vol.Required(CONF_MENGE, default=aktuelle_menge): _mengenauswahl(),
+            vol.Required(
+                CONF_EINBLASPAUSCHALE, default=aktuelle_pauschale
+            ): _pauschalenauswahl(),
+        }
+        if self._ist_deutschland:
+            felder[
+                vol.Required(
+                    CONF_BUNDESLAND_VERGLEICH,
+                    default=self.config_entry.options.get(
+                        CONF_BUNDESLAND_VERGLEICH, DEFAULT_BUNDESLAND_VERGLEICH
+                    ),
+                )
+            ] = BooleanSelector()
+
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_MENGE, default=aktuelle_menge): _mengenauswahl(),
-                    vol.Required(
-                        CONF_EINBLASPAUSCHALE, default=aktuelle_pauschale
-                    ): _pauschalenauswahl(),
-                }
-            ),
+            data_schema=vol.Schema(felder),
             description_placeholders={
                 "region": REGIONEN.get(
                     self.config_entry.data.get(CONF_REGION, ""), "?"

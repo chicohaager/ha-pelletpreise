@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
@@ -18,23 +19,29 @@ from .berechnung import (
     warenwert_euro,
 )
 from .const import (
+    BUNDESLAENDER,
+    CONF_BUNDESLAND_VERGLEICH,
     CONF_EINBLASPAUSCHALE,
     CONF_MENGE,
     CONF_REGION,
+    DEFAULT_BUNDESLAND_VERGLEICH,
     DEFAULT_EINBLASPAUSCHALE,
     DOMAIN,
     REGION_DEUTSCHLAND,
     REGIONEN,
     UPDATE_INTERVAL_HOURS,
+    VERGLEICH_PARALLEL,
 )
 from .parser import (
     REFERENZMENGE_KG,
     Bundespreise,
     ParseError,
     Preis,
+    Regionalpreise,
     parse_bundesland,
     parse_deutschland,
 )
+from .vergleich import Vergleich, bilde_vergleich
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -83,6 +90,18 @@ class Preisdaten:
 
     langfrist: Bundespreise | None
     """Nur für die Region Deutschland gefüllt."""
+
+    vergleich_lose: Vergleich | None = None
+    """Günstigstes/teuerstes Bundesland bei loser Ware.
+
+    Nur gefüllt, wenn der Bundesland-Vergleich eingeschaltet ist **und** alle
+    16 Seiten gelesen werden konnten. Bei einem einzigen Fehlschlag bleibt das
+    Feld leer: „das günstigste von 15" wäre eine Aussage über eine Menge, die
+    gar nicht vollständig geprüft wurde.
+    """
+
+    vergleich_sackware: Vergleich | None = None
+    """Dasselbe für Sackware — Bundesländer ohne Angebot bleiben außen vor."""
 
     def warenwert(self, preis: Preis) -> float:
         """Der reine Warenwert der Bestellmenge, ohne jeden Zuschlag."""
@@ -146,11 +165,48 @@ async def seite_holen(session: aiohttp.ClientSession, url: str) -> str:
         raise UpdateFailed(f"Verbindungsfehler beim Abruf von {url}: {err}") from err
 
 
+async def bundeslandpreise_abrufen(
+    session: aiohttp.ClientSession,
+) -> dict[str, Regionalpreise]:
+    """Hole alle 16 Bundesland-Seiten — alles oder nichts.
+
+    Ein Fehlschlag reißt den ganzen Vergleich mit: wer wissen will, wo es am
+    günstigsten ist, bekommt entweder eine Antwort über alle 16 Länder oder
+    gar keine. Ein Vergleich über die zufällig erreichbaren Seiten wäre der
+    klassische stille Fehler — er sähe genauso aus wie das echte Ergebnis.
+
+    Die Abrufe laufen gedrosselt (``VERGLEICH_PARALLEL``), damit hier nicht
+    16 gleichzeitige Anfragen bei einer fremden Website auflaufen.
+    """
+    grenze = asyncio.Semaphore(VERGLEICH_PARALLEL)
+
+    async def eine_seite(slug: str) -> Regionalpreise:
+        async with grenze:
+            html = await seite_holen(session, region_url(slug))
+        return parse_bundesland(html, REGIONEN[slug])
+
+    slugs = sorted(BUNDESLAENDER)
+    ergebnisse = await asyncio.gather(
+        *(eine_seite(slug) for slug in slugs), return_exceptions=True
+    )
+
+    preise: dict[str, Regionalpreise] = {}
+    for slug, ergebnis in zip(slugs, ergebnisse, strict=True):
+        if isinstance(ergebnis, BaseException):
+            raise UpdateFailed(
+                f"Bundesland-Vergleich abgebrochen bei {REGIONEN[slug]}: {ergebnis}"
+            ) from ergebnis
+        preise[slug] = ergebnis
+    return preise
+
+
 async def preise_abrufen(
     session: aiohttp.ClientSession,
     region: str,
     menge_kg: int,
     einblaspauschale_eur: float = DEFAULT_EINBLASPAUSCHALE,
+    *,
+    bundesland_vergleich: bool = DEFAULT_BUNDESLAND_VERGLEICH,
 ) -> Preisdaten:
     """Hole und lies die Preise einer Region.
 
@@ -184,6 +240,33 @@ async def preise_abrufen(
         # solche erkennbar ist und nicht als "Sensor kaputt".
         raise UpdateFailed(str(err)) from err
 
+    vergleich_lose: Vergleich | None = None
+    vergleich_sackware: Vergleich | None = None
+    if bundesland_vergleich and region == REGION_DEUTSCHLAND:
+        try:
+            regionalpreise = await bundeslandpreise_abrufen(session)
+        except (UpdateFailed, ParseError) as err:
+            # Bewusst kein Abbruch des ganzen Abrufs: der Bundesdurchschnitt
+            # steht bereits und ist der Hauptzweck des Eintrags. Die
+            # Vergleichssensoren bleiben ohne Wert — und der Grund steht im
+            # Protokoll, statt sich hinter einer leeren Anzeige zu verstecken.
+            _LOGGER.warning(
+                "Pelletpreise: Bundesland-Vergleich übersprungen. %s", err
+            )
+        else:
+            vergleich_lose = bilde_vergleich(
+                {
+                    slug: preise.lose.euro_pro_tonne
+                    for slug, preise in regionalpreise.items()
+                }
+            )
+            vergleich_sackware = bilde_vergleich(
+                {
+                    slug: preise.sackware.euro_pro_tonne if preise.sackware else None
+                    for slug, preise in regionalpreise.items()
+                }
+            )
+
     return Preisdaten(
         region=region,
         region_name=region_name,
@@ -192,6 +275,8 @@ async def preise_abrufen(
         lose=lose,
         sackware=sackware,
         langfrist=langfrist,
+        vergleich_lose=vergleich_lose,
+        vergleich_sackware=vergleich_sackware,
     )
 
 
@@ -221,6 +306,16 @@ class PelletpreiseCoordinator(DataUpdateCoordinator[Preisdaten]):
                 entry.data.get(CONF_EINBLASPAUSCHALE, DEFAULT_EINBLASPAUSCHALE),
             )
         )
+        # Der Vergleich kostet 16 zusätzliche Abrufe und ergibt nur im
+        # Deutschland-Eintrag Sinn. Die zweite Bedingung ist keine Formsache:
+        # ohne sie würde ein von Hand gesetzter Schalter in einem
+        # Bundesland-Eintrag stillschweigend 16 Abrufe je Aktualisierung
+        # auslösen, ohne dass dort je ein Sensor davon entstünde.
+        self.bundesland_vergleich: bool = bool(
+            entry.options.get(
+                CONF_BUNDESLAND_VERGLEICH, DEFAULT_BUNDESLAND_VERGLEICH
+            )
+        ) and self.region == REGION_DEUTSCHLAND
         self._session = session
         super().__init__(
             hass,
@@ -236,7 +331,11 @@ class PelletpreiseCoordinator(DataUpdateCoordinator[Preisdaten]):
 
     async def _async_update_data(self) -> Preisdaten:
         daten = await preise_abrufen(
-            self._session, self.region, self.menge, self.einblaspauschale
+            self._session,
+            self.region,
+            self.menge,
+            self.einblaspauschale,
+            bundesland_vergleich=self.bundesland_vergleich,
         )
         if daten.sackware is None and self.region != REGION_DEUTSCHLAND:
             _LOGGER.debug(

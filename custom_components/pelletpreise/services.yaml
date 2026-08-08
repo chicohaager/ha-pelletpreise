@@ -1,0 +1,11 @@
+# Dienste der Pelletpreise-Integration.
+#
+# Der Dienst gilt nur für die Sensoren mit "(beobachtet)" im Namen. Wird er auf
+# einen anderen Sensor der Integration angewendet, lehnt dieser ihn mit einer
+# Erklärung ab, statt einen AttributeError ins Protokoll zu schreiben.
+
+extremwerte_zuruecksetzen:
+  target:
+    entity:
+      domain: sensor
+      integration: pelletpreise

@@ -29,6 +29,9 @@ async def async_get_config_entry_diagnostics(
         # gemeldeter Gesamtpreis nicht nachrechnen, und ein "zu hoher Preis"
         # sähe nach einem Parser-Fehler aus, obwohl er eingetragen wurde.
         "einblaspauschale_eur": coordinator.einblaspauschale,
+        # Erklärt im Fehlerbericht sowohl die Abrufdauer als auch das Fehlen
+        # der Vergleichssensoren, ohne dass jemand raten muss.
+        "bundesland_vergleich_aktiv": coordinator.bundesland_vergleich,
         "letzter_abruf_erfolgreich": coordinator.last_update_success,
     }
     if not coordinator.last_update_success:
@@ -61,5 +64,30 @@ async def async_get_config_entry_diagnostics(
                 if daten.langfrist
                 else None
             ),
+            # Die beobachteten Extremwerte stehen bewusst **nicht** hier: sie
+            # gehören den Entitäten, nicht dem Coordinator. Wer sie in einem
+            # Bericht braucht, findet sie mit ihren Attributen
+            # (gesehen_am, beobachtet_seit) unter "Zustände".
+            "vergleich": {
+                warenart: (
+                    {
+                        "guenstigste": vergleich.guenstigste.name,
+                        "guenstigste_euro_pro_tonne": (
+                            vergleich.guenstigste.euro_pro_tonne
+                        ),
+                        "teuerste": vergleich.teuerste.name,
+                        "teuerste_euro_pro_tonne": vergleich.teuerste.euro_pro_tonne,
+                        "spanne_euro": vergleich.spanne_euro,
+                        "ohne_angebot": list(vergleich.ohne_angebot),
+                        "preise": vergleich.preise,
+                    }
+                    if vergleich
+                    else None
+                )
+                for warenart, vergleich in (
+                    ("lose", daten.vergleich_lose),
+                    ("sackware", daten.vergleich_sackware),
+                )
+            },
         }
     return diagnose

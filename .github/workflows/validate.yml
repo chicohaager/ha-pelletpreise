@@ -34,8 +34,26 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-      - run: pip install pytest
+      # PyYAML für tests/test_uebersetzungen.py: der Test liest services.yaml
+      # und vergleicht die Dienstnamen mit den Sprachdateien.
+      - run: pip install pytest pyyaml
       - run: python -m pytest tests/ -v
+
+  ha-tests:
+    name: Tests mit laufendem Home Assistant
+    runs-on: ubuntu-latest
+    # Prüft, was die Offline-Tests nicht sehen können: ob die Entitäten
+    # überhaupt entstehen, ob der beobachtete Tief-/Höchstwert einen Neustart
+    # übersteht, ob der Dienst greift und ob ein Fehlschlag wirklich keinen
+    # Wert liefert. Braucht Python 3.13 — ältere Versionen bekommen von
+    # pytest-homeassistant-custom-component nur ein Home Assistant von 2025.1.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install pytest-homeassistant-custom-component
+      - run: python -m pytest tests/test_sensoren_ha.py -v -o asyncio_mode=auto
 
   quelle:
     name: Quelle noch lesbar?
