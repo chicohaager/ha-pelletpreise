@@ -170,7 +170,7 @@ gegenüber 406,16 €/t), sind aber nicht dasselbe.
 
 Diese Integration liest exakt das, was heizpellets24.de auf seinen öffentlichen
 Preisseiten anzeigt. Dazu gerechnet wird genau eine Zahl, und nur wenn du sie
-selbst einträgst: die [Einblaspauschale](#einblaspauschale). Vier Punkte sind
+selbst einträgst: die [Einblaspauschale](#einblaspauschale). Fünf Punkte sind
 wichtig:
 
 - **Der Preis ist ein Marktdurchschnitt, kein Angebot.** Die Quelle bildet ihn
@@ -188,6 +188,11 @@ wichtig:
   *nicht* abgefragt: die Quelle liefert auf ihren öffentlichen Seiten keine
   PLZ-genauen Preise, und eine PLZ, die nichts bewirkt, würde eine Genauigkeit
   vortäuschen, die es nicht gibt.
+- **Einzelne Händlerangebote gibt es nicht.** Damit ist auch keine Spanne
+  „günstigster bis teuerster Anbieter" möglich und keine echte
+  Einblaspauschale: die öffentliche Seite nennt je Region nur eine Zahl und
+  keinen Pauschalbetrag, und die Endpunkte mit den Angeboten sperrt die
+  `robots.txt` von heizpellets24.de für alle Clients.
 
 Geht bei der Quelle etwas kaputt oder ändert sich das Seitenformat, werden die
 Sensoren **nicht verfügbar** und die Integration meldet im Protokoll, welcher
