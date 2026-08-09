@@ -130,8 +130,61 @@ def test_der_registrierte_dienstname_steht_auch_in_services_yaml():
 
 @pytest.mark.parametrize("datei", SPRACHDATEIEN, ids=lambda p: p.name)
 def test_jedes_optionsfeld_ist_beschriftet_und_erklaert(datei):
-    """Auch die Erklärzeile zählt: sie nennt die 16 zusätzlichen Abrufe."""
+    """Auch die Erklärzeile zählt: sie nennt die zusätzlichen Abrufe."""
     schritt = sprache(datei)["options"]["step"]["init"]
     assert set(schritt["data"]) == set(schritt["data_description"])
     assert "bundesland_vergleich" in schritt["data"]
     assert schritt["data_description"]["bundesland_vergleich"].strip()
+
+
+# ---------------------------------------------------------------------------
+# Einrichtungsdialog
+# ---------------------------------------------------------------------------
+
+
+def _schluesselbaum(wert, pfad: str = "") -> set[str]:
+    """Alle Pfade eines verschachtelten Objekts — die Form, nicht der Text."""
+    if not isinstance(wert, dict):
+        return {pfad}
+    return {p for k, v in wert.items() for p in _schluesselbaum(v, f"{pfad}/{k}")}
+
+
+def test_alle_sprachdateien_haben_dieselbe_form():
+    """Ein vergessener Schritt in en.json zeigt dem Nutzer den rohen Schlüssel.
+
+    Beim Umbau auf drei Länder kam ein zweiter Einrichtungsschritt dazu. Wäre
+    er nur in strings.json und de.json gelandet, sähe eine englischsprachige
+    Installation dort „region" statt einer Erklärung — und nichts stürzte ab.
+    """
+    formen = {datei.name: _schluesselbaum(sprache(datei)) for datei in SPRACHDATEIEN}
+    vorlage = formen["strings.json"]
+    for name, form in formen.items():
+        assert form == vorlage, (
+            f"{name}: fehlend {sorted(vorlage - form)}, "
+            f"überzählig {sorted(form - vorlage)}"
+        )
+
+
+def test_die_schritte_der_sprachdateien_sind_die_des_dialogs():
+    """Sonst zeigt Home Assistant für einen Schritt gar keine Beschriftung.
+
+    Die Schritte werden aus `config_flow.py` gelesen (Methodennamen
+    `async_step_*`) und nicht danebengeschrieben — eine zweite von Hand
+    gepflegte Liste würde still veralten.
+    """
+    quelle = (PAKET / "config_flow.py").read_text(encoding="utf-8")
+    baum = ast.parse(quelle)
+    schritte = {
+        knoten.name.removeprefix("async_step_")
+        for klasse in ast.walk(baum)
+        if isinstance(klasse, ast.ClassDef) and klasse.name.endswith("ConfigFlow")
+        for knoten in klasse.body
+        if isinstance(knoten, ast.AsyncFunctionDef)
+        and knoten.name.startswith("async_step_")
+    }
+    assert schritte, "In config_flow.py wurde kein einziger Schritt gefunden"
+    for datei in SPRACHDATEIEN:
+        assert set(sprache(datei)["config"]["step"]) == schritte, (
+            f"{datei.name}: Schritte weichen von config_flow.py ab "
+            f"({sorted(schritte)})"
+        )

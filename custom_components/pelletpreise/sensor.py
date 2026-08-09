@@ -23,15 +23,16 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    ATTRIBUTION,
-    ATTRIBUTION_BEOBACHTET,
     BEREICH_IMMER,
-    BEREICH_NUR_BUNDESLAND,
-    BEREICH_NUR_DEUTSCHLAND,
+    BEREICH_NUR_LANDESEBENE,
+    BEREICH_NUR_UNTERREGION,
     DOMAIN,
+    Land,
+    attribution,
+    attribution_beobachtet,
     passt_zur_region,
 )
-from .berechnung import euro
+from .berechnung import betrag_text
 from .coordinator import PelletpreiseCoordinator, Preisdaten
 from .extremwerte import (
     MODUS_HOCH,
@@ -51,10 +52,36 @@ _LOGGER = logging.getLogger(__name__)
 
 SERVICE_EXTREMWERTE_ZURUECKSETZEN = "extremwerte_zuruecksetzen"
 
-# Preise führt die Quelle als €/1.000 kg — das ist dasselbe wie €/t.
-EURO_PRO_TONNE = "€/t"
-EURO_PRO_KG = "€/kg"
-EURO = "€"
+# Preise führt die Quelle als Währung/1.000 kg — das ist dasselbe wie /t.
+#
+# Die Währung steht hier als Platzhalter und nicht als Zeichen: sie hängt am
+# Land (Schweiz: CHF) und wird aus der Seite gelesen, nicht angenommen. Die
+# Beschreibungen sind eingefrorene Dataclasses und gelten für alle Einträge
+# gemeinsam — die fertige Einheit entsteht deshalb erst je Entität, in
+# `PelletpreisBasisSensor.__init__`.
+PLATZHALTER_WAEHRUNG = "{waehrung}"
+PREIS_PRO_TONNE = "{waehrung}/t"
+PREIS_PRO_KG = "{waehrung}/kg"
+BETRAG = "{waehrung}"
+
+
+def _einheit(vorlage: str | None, waehrung: str) -> str | None:
+    """Setze die Währung in eine Einheiten-Vorlage ein.
+
+    Einheiten ohne Platzhalter (PERCENTAGE) bleiben unverändert — sie sind
+    währungsfrei und deshalb in jedem Land richtig.
+
+    Der Test ``test_keine_einheit_traegt_noch_einen_platzhalter`` prüft, dass
+    hinterher nirgends mehr eine geschweifte Klammer steht: eine vergessene
+    Ersetzung sähe im Dashboard als „{waehrung}/t" zwar auffällig aus, würde
+    aber erst dem Nutzer auffallen und nicht hier.
+    """
+    if vorlage is None:
+        return None
+    if PLATZHALTER_WAEHRUNG not in vorlage:
+        return vorlage
+    return vorlage.format(waehrung=waehrung)
+
 
 # Bewusst **kein** device_class=MONETARY:
 # Home Assistant lässt zu MONETARY nur `state_class: total` (oder gar keine)
@@ -111,8 +138,8 @@ def _lose_gesamt_attribute(daten: Preisdaten) -> dict[str, Any]:
     """
     return {
         "bestellmenge_kg": daten.menge_kg,
-        "warenwert_eur": daten.warenwert(daten.lose),
-        "einblaspauschale_eur": daten.einblaspauschale_eur,
+        "warenwert": daten.warenwert(daten.lose),
+        "einblaspauschale": daten.einblaspauschale,
         "berechnung": daten.berechnung(mit_einblaspauschale=True),
     }
 
@@ -126,20 +153,20 @@ def _sackware_gesamt_attribute(daten: Preisdaten) -> dict[str, Any]:
     """
     attribute: dict[str, Any] = {
         "bestellmenge_kg": daten.menge_kg,
-        "einblaspauschale_eur": 0.0,
+        "einblaspauschale": 0.0,
         "berechnung": daten.berechnung(mit_einblaspauschale=False),
     }
-    if daten.einblaspauschale_eur:
+    if daten.einblaspauschale:
         attribute["hinweis_einblaspauschale"] = (
             f"Die eingetragene Einblaspauschale von "
-            f"{euro(daten.einblaspauschale_eur)} gilt hier nicht: Sackware "
-            "wird auf Paletten geliefert und nicht eingeblasen."
+            f"{betrag_text(daten.einblaspauschale, daten.waehrung)} gilt hier "
+            "nicht: Sackware wird auf Paletten geliefert und nicht eingeblasen."
         )
     return attribute
 
 
 def _vergleich_attribute(
-    vergleich: Vergleich | None, *, guenstigste: bool
+    daten: Preisdaten, vergleich: Vergleich | None, *, guenstigste: bool
 ) -> dict[str, Any]:
     """Sagt, **welches** Bundesland der Wert ist — und was daneben lag.
 
@@ -154,16 +181,18 @@ def _vergleich_attribute(
     gleichauf = (
         vergleich.gleichauf_guenstigste if guenstigste else vergleich.gleichauf_teuerste
     )
+    anzahl = len(daten.land.unterregionen)
     attribute: dict[str, Any] = {
         "bundesland": rang.name,
         "verglichene_bundeslaender": len(vergleich.preise),
-        "spanne_eur_pro_tonne": vergleich.spanne_euro,
+        "spanne_pro_tonne": vergleich.spanne,
         "preise_je_bundesland": vergleich.preise,
         "hinweis": (
-            "Vergleich der 16 Bundesland-Seiten von heizpellets24.de. Der "
-            "Bundesdurchschnitt der Deutschland-Seite bildet die Quelle nach "
-            "eigener Angabe je Postleitzahl und nicht aus diesen 16 Werten — "
-            "beide Zahlen liegen nah beieinander, sind aber nicht dasselbe."
+            f"Vergleich der {anzahl} Bundesland-Seiten von {daten.land.host}. "
+            f"Der Landesdurchschnitt der {daten.land.name}-Seite bildet die "
+            "Quelle nach eigener Angabe je Postleitzahl und nicht aus diesen "
+            f"{anzahl} Werten — beide Zahlen liegen nah beieinander, sind aber "
+            "nicht dasselbe."
         ),
     }
     if gleichauf:
@@ -173,13 +202,13 @@ def _vergleich_attribute(
     return attribute
 
 
-def _extremwert_hinweis(modus: str) -> str:
+def _extremwert_hinweis(modus: str, land: Land) -> str:
     """Der Satz, der diesen Wert von einem Wert der Quelle unterscheidet."""
     richtung = "niedrigste" if modus == MODUS_TIEF else "höchste"
     return (
         f"Der {richtung} Preis, den diese Integration selbst gesehen hat. "
-        "Keine Angabe von heizpellets24.de: die Quelle nennt Tief- und "
-        "Höchstwerte nur für Deutschland und nur über drei Jahre. Der Wert "
+        f"Keine Angabe von {land.host}: die Quelle nennt Tief- und Höchstwerte "
+        f"nur auf der {land.name}-Seite und nur über drei Jahre. Der Wert "
         "reicht deshalb nicht weiter zurück als 'beobachtet_seit'."
     )
 
@@ -189,25 +218,25 @@ SENSOREN: tuple[PelletpreisSensorDescription, ...] = (
     PelletpreisSensorDescription(
         key="lose_tonne",
         translation_key="lose_tonne",
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:tanker-truck",
-        wert=lambda d: d.lose.euro_pro_tonne,
+        wert=lambda d: d.lose.preis_pro_tonne,
     ),
     PelletpreisSensorDescription(
         key="lose_kg",
         translation_key="lose_kg",
-        native_unit_of_measurement=EURO_PRO_KG,
+        native_unit_of_measurement=PREIS_PRO_KG,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=4,
         icon="mdi:tanker-truck",
-        wert=lambda d: round(d.lose.euro_pro_tonne / 1000, 4),
+        wert=lambda d: round(d.lose.preis_pro_tonne / 1000, 4),
     ),
     PelletpreisSensorDescription(
         key="lose_gesamt",
         translation_key="lose_gesamt",
-        native_unit_of_measurement=EURO,
+        native_unit_of_measurement=BETRAG,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:cash",
@@ -229,28 +258,28 @@ SENSOREN: tuple[PelletpreisSensorDescription, ...] = (
     PelletpreisSensorDescription(
         key="sackware_tonne",
         translation_key="sackware_tonne",
-        bereich=BEREICH_NUR_BUNDESLAND,
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        bereich=BEREICH_NUR_UNTERREGION,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:package-variant-closed",
-        wert=lambda d: d.sackware.euro_pro_tonne if d.sackware else None,
+        wert=lambda d: d.sackware.preis_pro_tonne if d.sackware else None,
     ),
     PelletpreisSensorDescription(
         key="sackware_kg",
         translation_key="sackware_kg",
-        bereich=BEREICH_NUR_BUNDESLAND,
-        native_unit_of_measurement=EURO_PRO_KG,
+        bereich=BEREICH_NUR_UNTERREGION,
+        native_unit_of_measurement=PREIS_PRO_KG,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=4,
         icon="mdi:package-variant-closed",
-        wert=lambda d: round(d.sackware.euro_pro_tonne / 1000, 4) if d.sackware else None,
+        wert=lambda d: round(d.sackware.preis_pro_tonne / 1000, 4) if d.sackware else None,
     ),
     PelletpreisSensorDescription(
         key="sackware_gesamt",
         translation_key="sackware_gesamt",
-        bereich=BEREICH_NUR_BUNDESLAND,
-        native_unit_of_measurement=EURO,
+        bereich=BEREICH_NUR_UNTERREGION,
+        native_unit_of_measurement=BETRAG,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:cash",
@@ -264,7 +293,7 @@ SENSOREN: tuple[PelletpreisSensorDescription, ...] = (
     PelletpreisSensorDescription(
         key="sackware_aenderung_woche",
         translation_key="sackware_aenderung_woche",
-        bereich=BEREICH_NUR_BUNDESLAND,
+        bereich=BEREICH_NUR_UNTERREGION,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
@@ -275,110 +304,110 @@ SENSOREN: tuple[PelletpreisSensorDescription, ...] = (
     PelletpreisSensorDescription(
         key="tief_3jahre",
         translation_key="tief_3jahre",
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:arrow-down-bold",
-        bereich=BEREICH_NUR_DEUTSCHLAND,
+        bereich=BEREICH_NUR_LANDESEBENE,
         wert=lambda d: d.langfrist.tief_3jahre if d.langfrist else None,
     ),
     PelletpreisSensorDescription(
         key="hoch_3jahre",
         translation_key="hoch_3jahre",
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:arrow-up-bold",
-        bereich=BEREICH_NUR_DEUTSCHLAND,
+        bereich=BEREICH_NUR_LANDESEBENE,
         wert=lambda d: d.langfrist.hoch_3jahre if d.langfrist else None,
     ),
     PelletpreisSensorDescription(
         key="schnitt_3jahre",
         translation_key="schnitt_3jahre",
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:chart-line",
-        bereich=BEREICH_NUR_DEUTSCHLAND,
+        bereich=BEREICH_NUR_LANDESEBENE,
         wert=lambda d: d.langfrist.schnitt_3jahre if d.langfrist else None,
     ),
     PelletpreisSensorDescription(
         key="differenz_3monate",
         translation_key="differenz_3monate",
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:calendar-range",
-        bereich=BEREICH_NUR_DEUTSCHLAND,
-        wert=lambda d: d.langfrist.differenz_3monate_euro if d.langfrist else None,
+        bereich=BEREICH_NUR_LANDESEBENE,
+        wert=lambda d: d.langfrist.differenz_3monate if d.langfrist else None,
     ),
     # --- Bundesland-Vergleich, nur auf Wunsch (16 zusätzliche Abrufe) -----
     PelletpreisSensorDescription(
         key="guenstigstes_bundesland_lose",
         translation_key="guenstigstes_bundesland_lose",
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:map-marker-down",
-        bereich=BEREICH_NUR_DEUTSCHLAND,
+        bereich=BEREICH_NUR_LANDESEBENE,
         nur_mit_vergleich=True,
         wert=lambda d: (
-            d.vergleich_lose.guenstigste.euro_pro_tonne if d.vergleich_lose else None
+            d.vergleich_lose.guenstigste.preis_pro_tonne if d.vergleich_lose else None
         ),
         zusatzattribute=lambda d: _vergleich_attribute(
-            d.vergleich_lose, guenstigste=True
+            d, d.vergleich_lose, guenstigste=True
         ),
     ),
     PelletpreisSensorDescription(
         key="teuerstes_bundesland_lose",
         translation_key="teuerstes_bundesland_lose",
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:map-marker-up",
-        bereich=BEREICH_NUR_DEUTSCHLAND,
+        bereich=BEREICH_NUR_LANDESEBENE,
         nur_mit_vergleich=True,
         wert=lambda d: (
-            d.vergleich_lose.teuerste.euro_pro_tonne if d.vergleich_lose else None
+            d.vergleich_lose.teuerste.preis_pro_tonne if d.vergleich_lose else None
         ),
         zusatzattribute=lambda d: _vergleich_attribute(
-            d.vergleich_lose, guenstigste=False
+            d, d.vergleich_lose, guenstigste=False
         ),
     ),
     PelletpreisSensorDescription(
         key="guenstigstes_bundesland_sackware",
         translation_key="guenstigstes_bundesland_sackware",
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:map-marker-down",
-        bereich=BEREICH_NUR_DEUTSCHLAND,
+        bereich=BEREICH_NUR_LANDESEBENE,
         nur_mit_vergleich=True,
         wert=lambda d: (
-            d.vergleich_sackware.guenstigste.euro_pro_tonne
+            d.vergleich_sackware.guenstigste.preis_pro_tonne
             if d.vergleich_sackware
             else None
         ),
         zusatzattribute=lambda d: _vergleich_attribute(
-            d.vergleich_sackware, guenstigste=True
+            d, d.vergleich_sackware, guenstigste=True
         ),
     ),
     PelletpreisSensorDescription(
         key="teuerstes_bundesland_sackware",
         translation_key="teuerstes_bundesland_sackware",
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:map-marker-up",
-        bereich=BEREICH_NUR_DEUTSCHLAND,
+        bereich=BEREICH_NUR_LANDESEBENE,
         nur_mit_vergleich=True,
         wert=lambda d: (
-            d.vergleich_sackware.teuerste.euro_pro_tonne
+            d.vergleich_sackware.teuerste.preis_pro_tonne
             if d.vergleich_sackware
             else None
         ),
         zusatzattribute=lambda d: _vergleich_attribute(
-            d.vergleich_sackware, guenstigste=False
+            d, d.vergleich_sackware, guenstigste=False
         ),
     ),
 )
@@ -394,44 +423,44 @@ EXTREMWERT_SENSOREN: tuple[PelletpreisExtremwertDescription, ...] = (
     PelletpreisExtremwertDescription(
         key="lose_tief_beobachtet",
         translation_key="lose_tief_beobachtet",
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:trending-down",
         modus=MODUS_TIEF,
-        beobachtet=lambda d: d.lose.euro_pro_tonne,
+        beobachtet=lambda d: d.lose.preis_pro_tonne,
     ),
     PelletpreisExtremwertDescription(
         key="lose_hoch_beobachtet",
         translation_key="lose_hoch_beobachtet",
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:trending-up",
         modus=MODUS_HOCH,
-        beobachtet=lambda d: d.lose.euro_pro_tonne,
+        beobachtet=lambda d: d.lose.preis_pro_tonne,
     ),
     PelletpreisExtremwertDescription(
         key="sackware_tief_beobachtet",
         translation_key="sackware_tief_beobachtet",
-        bereich=BEREICH_NUR_BUNDESLAND,
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        bereich=BEREICH_NUR_UNTERREGION,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:trending-down",
         modus=MODUS_TIEF,
-        beobachtet=lambda d: d.sackware.euro_pro_tonne if d.sackware else None,
+        beobachtet=lambda d: d.sackware.preis_pro_tonne if d.sackware else None,
     ),
     PelletpreisExtremwertDescription(
         key="sackware_hoch_beobachtet",
         translation_key="sackware_hoch_beobachtet",
-        bereich=BEREICH_NUR_BUNDESLAND,
-        native_unit_of_measurement=EURO_PRO_TONNE,
+        bereich=BEREICH_NUR_UNTERREGION,
+        native_unit_of_measurement=PREIS_PRO_TONNE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         icon="mdi:trending-up",
         modus=MODUS_HOCH,
-        beobachtet=lambda d: d.sackware.euro_pro_tonne if d.sackware else None,
+        beobachtet=lambda d: d.sackware.preis_pro_tonne if d.sackware else None,
     ),
 )
 
@@ -469,7 +498,6 @@ class PelletpreisBasisSensor(CoordinatorEntity[PelletpreiseCoordinator], SensorE
     """Gemeinsames Gerüst: Geräteangaben, Herkunftsattribute, Dienstsperre."""
 
     _attr_has_entity_name = True
-    _attr_attribution = ATTRIBUTION
 
     def __init__(
         self,
@@ -480,6 +508,13 @@ class PelletpreisBasisSensor(CoordinatorEntity[PelletpreiseCoordinator], SensorE
         super().__init__(coordinator)
         self.entity_description = beschreibung
         self._attr_unique_id = f"{entry.entry_id}_{beschreibung.key}"
+        # Die Quellenangabe nennt die Domain, von der dieser Eintrag wirklich
+        # liest. "Daten von heizpellets24.de" an einem Schweizer Preis wäre
+        # eine Behauptung über die Herkunft, die nicht stimmt.
+        self._attr_attribution = attribution(coordinator.land)
+        self._attr_native_unit_of_measurement = _einheit(
+            beschreibung.native_unit_of_measurement, coordinator.waehrung
+        )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=f"Pelletpreise {coordinator.region_name}",
@@ -496,6 +531,11 @@ class PelletpreisBasisSensor(CoordinatorEntity[PelletpreiseCoordinator], SensorE
             return {}
         return {
             "region": daten.region_name,
+            "land": daten.land.name,
+            # Steht ausdrücklich am Sensor und nicht nur in der Einheit: wer
+            # Attribute in einer Vorlage weiterrechnet, sieht sonst nicht, dass
+            # er Franken vor sich hat.
+            "waehrung": daten.waehrung,
             "quelle": self.coordinator.url,
             "basis_kg": REFERENZMENGE_KG,
         }
@@ -569,11 +609,6 @@ class PelletpreisExtremwertSensor(PelletpreisBasisSensor, RestoreEntity):
 
     entity_description: PelletpreisExtremwertDescription
 
-    # Die Quellenangabe der übrigen Sensoren gilt hier nur zur Hälfte: der
-    # einzelne Preis kommt von heizpellets24.de, die Aussage „das ist der
-    # tiefste seit Beobachtungsbeginn" kommt von hier.
-    _attr_attribution = ATTRIBUTION_BEOBACHTET
-
     def __init__(
         self,
         coordinator: PelletpreiseCoordinator,
@@ -581,6 +616,10 @@ class PelletpreisExtremwertSensor(PelletpreisBasisSensor, RestoreEntity):
         beschreibung: PelletpreisExtremwertDescription,
     ) -> None:
         super().__init__(coordinator, entry, beschreibung)
+        # Die Quellenangabe der übrigen Sensoren gilt hier nur zur Hälfte: der
+        # einzelne Preis kommt von der Quelle, die Aussage „das ist der
+        # tiefste seit Beobachtungsbeginn" kommt von hier.
+        self._attr_attribution = attribution_beobachtet(coordinator.land)
         self._extrem: Extremwert | None = None
 
     async def async_added_to_hass(self) -> None:
@@ -627,7 +666,7 @@ class PelletpreisExtremwertSensor(PelletpreisBasisSensor, RestoreEntity):
 
     @property
     def native_value(self) -> float | None:
-        return self._extrem.euro_pro_tonne if self._extrem else None
+        return self._extrem.preis_pro_tonne if self._extrem else None
 
     @property
     def available(self) -> bool:
@@ -636,7 +675,9 @@ class PelletpreisExtremwertSensor(PelletpreisBasisSensor, RestoreEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         attribute = self._basisattribute
-        attribute["hinweis"] = _extremwert_hinweis(self.entity_description.modus)
+        attribute["hinweis"] = _extremwert_hinweis(
+            self.entity_description.modus, self.coordinator.land
+        )
         if self._extrem is not None:
             attribute["gesehen_am"] = self._extrem.gesehen_am
             attribute["beobachtet_seit"] = self._extrem.beobachtet_seit
@@ -653,7 +694,7 @@ class PelletpreisExtremwertSensor(PelletpreisBasisSensor, RestoreEntity):
         _LOGGER.info(
             "%s: Extremwert zurückgesetzt (war %s)",
             self.entity_id,
-            self._extrem.euro_pro_tonne if self._extrem else "leer",
+            self._extrem.preis_pro_tonne if self._extrem else "leer",
         )
         self._extrem = None
         self._fortschreiben()

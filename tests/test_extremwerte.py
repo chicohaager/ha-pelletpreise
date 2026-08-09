@@ -39,7 +39,7 @@ HEUTE = "2026-08-08T09:00:00+02:00"
 @pytest.mark.parametrize("modus", [MODUS_TIEF, MODUS_HOCH])
 def test_der_erste_wert_beginnt_die_aufzeichnung(modus):
     extrem = fortschreiben(None, 400.38, HEUTE, modus=modus)
-    assert extrem.euro_pro_tonne == 400.38
+    assert extrem.preis_pro_tonne == 400.38
     assert extrem.gesehen_am == HEUTE
     assert extrem.beobachtet_seit == HEUTE
 
@@ -51,7 +51,7 @@ def test_tiefstwert_faellt_nur():
     assert teurer == start, "Ein teurerer Tag darf den Tiefstwert nicht anheben"
 
     billiger = fortschreiben(start, 388.10, HEUTE, modus=MODUS_TIEF)
-    assert billiger.euro_pro_tonne == 388.10
+    assert billiger.preis_pro_tonne == 388.10
     assert billiger.gesehen_am == HEUTE
 
 
@@ -62,7 +62,7 @@ def test_hoechstwert_steigt_nur():
     assert billiger == start, "Ein billigerer Tag darf den Höchstwert nicht senken"
 
     teurer = fortschreiben(start, 420.00, HEUTE, modus=MODUS_HOCH)
-    assert teurer.euro_pro_tonne == 420.00
+    assert teurer.preis_pro_tonne == 420.00
     assert teurer.gesehen_am == HEUTE
 
 
@@ -101,7 +101,7 @@ def test_unbekannter_modus_wird_abgelehnt():
 
 def test_rundreise_durch_den_speicher():
     extrem = Extremwert(
-        euro_pro_tonne=400.38, gesehen_am=GESTERN, beobachtet_seit=GESTERN
+        preis_pro_tonne=400.38, gesehen_am=GESTERN, beobachtet_seit=GESTERN
     )
     assert aus_speicher(fuer_speicher(extrem)) == extrem
 
@@ -113,19 +113,19 @@ def test_nichts_gespeichert_ist_kein_fehler():
 @pytest.mark.parametrize(
     ("rohdaten", "erwartet"),
     [
-        ({"gesehen_am": HEUTE, "beobachtet_seit": HEUTE}, "euro_pro_tonne"),
-        ({"euro_pro_tonne": 400.38, "gesehen_am": HEUTE}, "beobachtet_seit"),
+        ({"gesehen_am": HEUTE, "beobachtet_seit": HEUTE}, "preis_pro_tonne"),
+        ({"preis_pro_tonne": 400.38, "gesehen_am": HEUTE}, "beobachtet_seit"),
         (
-            {"euro_pro_tonne": "400,38", "gesehen_am": HEUTE, "beobachtet_seit": HEUTE},
+            {"preis_pro_tonne": "400,38", "gesehen_am": HEUTE, "beobachtet_seit": HEUTE},
             "keine Zahl",
         ),
         (
-            {"euro_pro_tonne": True, "gesehen_am": HEUTE, "beobachtet_seit": HEUTE},
+            {"preis_pro_tonne": True, "gesehen_am": HEUTE, "beobachtet_seit": HEUTE},
             "keine Zahl",
         ),
         (
             {
-                "euro_pro_tonne": PLAUSIBEL_MIN - 1,
+                "preis_pro_tonne": PLAUSIBEL_MIN - 1,
                 "gesehen_am": HEUTE,
                 "beobachtet_seit": HEUTE,
             },
@@ -133,7 +133,7 @@ def test_nichts_gespeichert_ist_kein_fehler():
         ),
         (
             {
-                "euro_pro_tonne": PLAUSIBEL_MAX + 1,
+                "preis_pro_tonne": PLAUSIBEL_MAX + 1,
                 "gesehen_am": HEUTE,
                 "beobachtet_seit": HEUTE,
             },
@@ -141,14 +141,14 @@ def test_nichts_gespeichert_ist_kein_fehler():
         ),
         (
             {
-                "euro_pro_tonne": 400.38,
+                "preis_pro_tonne": 400.38,
                 "gesehen_am": "gestern früh",
                 "beobachtet_seit": HEUTE,
             },
             "Zeitstempel",
         ),
         (
-            {"euro_pro_tonne": 400.38, "gesehen_am": 17, "beobachtet_seit": HEUTE},
+            {"preis_pro_tonne": 400.38, "gesehen_am": 17, "beobachtet_seit": HEUTE},
             "kein Text",
         ),
         ("400.38", "kein Objekt"),
@@ -173,8 +173,46 @@ def test_die_plausibilitaetssperre_laesst_echte_preise_durch():
     """
     for preis in (PLAUSIBEL_MIN, 242.92, 400.38, 712.50, PLAUSIBEL_MAX):
         rohdaten = {
-            "euro_pro_tonne": preis,
+            "preis_pro_tonne": preis,
             "gesehen_am": HEUTE,
             "beobachtet_seit": HEUTE,
         }
-        assert aus_speicher(rohdaten).euro_pro_tonne == preis
+        assert aus_speicher(rohdaten).preis_pro_tonne == preis
+
+
+# ---------------------------------------------------------------------------
+# Umbenennung des gespeicherten Feldes
+# ---------------------------------------------------------------------------
+
+
+def test_alte_aufzeichnungen_ueberleben_die_umbenennung():
+    """Bis 2.2.0 hieß das Feld "euro_pro_tonne".
+
+    Wer seit Monaten aufzeichnet, hat genau diese Form in seinem
+    Zustandsspeicher stehen. Würde sie nicht mehr gelesen, wäre der Rekord
+    beim Update still weg — und der Sensor begänne beim heutigen Preis von
+    vorn, ohne dass irgendetwas darauf hindeutete.
+    """
+    alt = {
+        "euro_pro_tonne": 242.92,
+        "gesehen_am": GESTERN,
+        "beobachtet_seit": GESTERN,
+    }
+    wieder = aus_speicher(alt)
+    assert wieder.preis_pro_tonne == 242.92
+    assert wieder.beobachtet_seit == GESTERN
+
+
+def test_geschrieben_wird_der_neue_name():
+    """Positivkontrolle zur Verträglichkeit oben.
+
+    Ohne sie könnte weiterhin der alte Name geschrieben werden, und der Test
+    darüber wäre trotzdem grün — die Umbenennung hätte dann gar nicht
+    stattgefunden.
+    """
+    gespeichert = fuer_speicher(
+        Extremwert(preis_pro_tonne=522.12, gesehen_am=HEUTE, beobachtet_seit=HEUTE)
+    )
+    assert "preis_pro_tonne" in gespeichert
+    assert "euro_pro_tonne" not in gespeichert
+    assert aus_speicher(gespeichert).preis_pro_tonne == 522.12

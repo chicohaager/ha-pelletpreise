@@ -23,12 +23,16 @@ async def async_get_config_entry_diagnostics(
 
     diagnose: dict[str, Any] = {
         "region": coordinator.region,
+        "land": coordinator.land.code,
+        # Gehört in jeden Fehlerbericht: ein gemeldeter Preis von 522 ist in
+        # Franken normal und in Euro ein Grund nachzusehen.
+        "waehrung": coordinator.waehrung,
         "quelle": coordinator.url,
         "bestellmenge_kg": coordinator.menge,
         # Gehört in jeden Fehlerbericht: ohne diesen Wert lässt sich ein
         # gemeldeter Gesamtpreis nicht nachrechnen, und ein "zu hoher Preis"
         # sähe nach einem Parser-Fehler aus, obwohl er eingetragen wurde.
-        "einblaspauschale_eur": coordinator.einblaspauschale,
+        "einblaspauschale": coordinator.einblaspauschale,
         # Erklärt im Fehlerbericht sowohl die Abrufdauer als auch das Fehlen
         # der Vergleichssensoren, ohne dass jemand raten muss.
         "bundesland_vergleich_aktiv": coordinator.bundesland_vergleich,
@@ -41,22 +45,22 @@ async def async_get_config_entry_diagnostics(
 
     if daten is not None:
         diagnose["werte"] = {
-            "lose_euro_pro_tonne": daten.lose.euro_pro_tonne,
+            "lose_pro_tonne": daten.lose.preis_pro_tonne,
             "lose_aenderung_prozent_woche": daten.lose.aenderung_prozent_woche,
             # Beide Zahlen nebeneinander, damit im Ticket sofort sichtbar ist,
             # welcher Anteil gelesen und welcher hinzugerechnet wurde.
-            "lose_warenwert_eur": daten.warenwert(daten.lose),
-            "lose_gesamt_eur": daten.gesamtpreis(daten.lose, mit_einblaspauschale=True),
-            "sackware_euro_pro_tonne": (
-                daten.sackware.euro_pro_tonne if daten.sackware else None
+            "lose_warenwert": daten.warenwert(daten.lose),
+            "lose_gesamt": daten.gesamtpreis(daten.lose, mit_einblaspauschale=True),
+            "sackware_pro_tonne": (
+                daten.sackware.preis_pro_tonne if daten.sackware else None
             ),
             "sackware_aenderung_prozent_woche": (
                 daten.sackware.aenderung_prozent_woche if daten.sackware else None
             ),
             "langfrist": (
                 {
-                    "differenz_woche_euro": daten.langfrist.differenz_woche_euro,
-                    "differenz_3monate_euro": daten.langfrist.differenz_3monate_euro,
+                    "differenz_woche": daten.langfrist.differenz_woche,
+                    "differenz_3monate": daten.langfrist.differenz_3monate,
                     "tief_3jahre": daten.langfrist.tief_3jahre,
                     "hoch_3jahre": daten.langfrist.hoch_3jahre,
                     "schnitt_3jahre": daten.langfrist.schnitt_3jahre,
@@ -72,12 +76,12 @@ async def async_get_config_entry_diagnostics(
                 warenart: (
                     {
                         "guenstigste": vergleich.guenstigste.name,
-                        "guenstigste_euro_pro_tonne": (
-                            vergleich.guenstigste.euro_pro_tonne
+                        "guenstigste_pro_tonne": (
+                            vergleich.guenstigste.preis_pro_tonne
                         ),
                         "teuerste": vergleich.teuerste.name,
-                        "teuerste_euro_pro_tonne": vergleich.teuerste.euro_pro_tonne,
-                        "spanne_euro": vergleich.spanne_euro,
+                        "teuerste_pro_tonne": vergleich.teuerste.preis_pro_tonne,
+                        "spanne": vergleich.spanne,
                         "ohne_angebot": list(vergleich.ohne_angebot),
                         "preise": vergleich.preise,
                     }

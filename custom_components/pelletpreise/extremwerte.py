@@ -1,9 +1,9 @@
 """Beobachtete Tief- und Höchstwerte — die eigene Aufzeichnung der Integration.
 
-Der Wert dieser Sensoren stammt **nicht** von heizpellets24.de. Die Quelle
-nennt Tief- und Höchstwerte ausschließlich auf der Deutschland-Seite
+Der Wert dieser Sensoren stammt **nicht** von heizpellets24. Die Quelle
+nennt Tief- und Höchstwerte ausschließlich auf der Landesseite
 (``low3Y``/``high3Y`` im Nuxt-Payload); auf den Bundesland-Seiten gibt es sie
-nicht. Live nachgemessen am 08.08.2026:
+nicht. Live nachgemessen am 08.08.2026 (de) bzw. 09.08.2026 (at):
 
     /pelletpreise         → "low3Y" 2×, "high3Y" 2×
     /pelletpreise/bayern  → "low3Y" 0×, "high3Y" 0×
@@ -39,9 +39,14 @@ MODUS_HOCH: Final = "hoch"
 
 @dataclass(frozen=True)
 class Extremwert:
-    """Ein festgehaltener Extremwert samt seiner Herkunft in der Zeit."""
+    """Ein festgehaltener Extremwert samt seiner Herkunft in der Zeit.
 
-    euro_pro_tonne: float
+    Ohne Währung: der Rekord gehört zu genau einem Eintrag, und dessen Region
+    — und damit dessen Land und Währung — steht fest, sobald er angelegt ist.
+    Ein Eintrag wechselt nie das Land.
+    """
+
+    preis_pro_tonne: float
     gesehen_am: str
     """Wann dieser Wert zum **ersten** Mal gesehen wurde (ISO 8601, lokale Zeit)."""
 
@@ -70,16 +75,16 @@ def fortschreiben(
         raise ValueError(f"Unbekannter Modus: {modus!r}")
     if bisher is None:
         return Extremwert(
-            euro_pro_tonne=preis, gesehen_am=zeitpunkt, beobachtet_seit=zeitpunkt
+            preis_pro_tonne=preis, gesehen_am=zeitpunkt, beobachtet_seit=zeitpunkt
         )
     if modus == MODUS_TIEF:
-        ist_neuer_rekord = preis < bisher.euro_pro_tonne
+        ist_neuer_rekord = preis < bisher.preis_pro_tonne
     else:
-        ist_neuer_rekord = preis > bisher.euro_pro_tonne
+        ist_neuer_rekord = preis > bisher.preis_pro_tonne
     if not ist_neuer_rekord:
         return bisher
     return Extremwert(
-        euro_pro_tonne=preis,
+        preis_pro_tonne=preis,
         gesehen_am=zeitpunkt,
         # Der Beobachtungsbeginn ist eine Eigenschaft der Aufzeichnung, nicht
         # des Wertes — er darf bei einem neuen Rekord nicht mitspringen.
@@ -87,10 +92,18 @@ def fortschreiben(
     )
 
 
+# Bis Version 2.2.0 hieß das gespeicherte Feld "euro_pro_tonne". Der Name war
+# damals richtig — es gab nur Deutschland. Geschrieben wird jetzt der neutrale
+# Name, gelesen werden beide: ein Rekord, den jemand seit Monaten aufzeichnet,
+# darf an einer Umbenennung nicht verloren gehen.
+FELD_PREIS: Final = "preis_pro_tonne"
+FELD_PREIS_ALT: Final = "euro_pro_tonne"
+
+
 def fuer_speicher(extrem: Extremwert) -> dict[str, Any]:
     """Die Form, in der der Wert einen Neustart überdauert."""
     return {
-        "euro_pro_tonne": extrem.euro_pro_tonne,
+        FELD_PREIS: extrem.preis_pro_tonne,
         "gesehen_am": extrem.gesehen_am,
         "beobachtet_seit": extrem.beobachtet_seit,
     }
@@ -109,15 +122,24 @@ def aus_speicher(rohdaten: Mapping[str, Any] | None) -> Extremwert | None:
     if not isinstance(rohdaten, Mapping):
         raise ValueError(f"Gespeicherter Extremwert ist kein Objekt: {rohdaten!r}")
 
+    if FELD_PREIS in rohdaten:
+        preisfeld = FELD_PREIS
+    elif FELD_PREIS_ALT in rohdaten:
+        preisfeld = FELD_PREIS_ALT
+    else:
+        # Fehlt beides, ist der Rekord kaputt. In der Meldung steht der
+        # heutige Name — der alte würde jemanden auf die Suche nach einem Feld
+        # schicken, das neue Aufzeichnungen gar nicht mehr schreiben.
+        preisfeld = FELD_PREIS
     fehlend = [
         feld
-        for feld in ("euro_pro_tonne", "gesehen_am", "beobachtet_seit")
+        for feld in (preisfeld, "gesehen_am", "beobachtet_seit")
         if feld not in rohdaten
     ]
     if fehlend:
         raise ValueError(f"Gespeicherter Extremwert ohne Feld(er): {', '.join(fehlend)}")
 
-    roh_preis = rohdaten["euro_pro_tonne"]
+    roh_preis = rohdaten[preisfeld]
     if isinstance(roh_preis, bool) or not isinstance(roh_preis, (int, float)):
         raise ValueError(f"Gespeicherter Extremwert ist keine Zahl: {roh_preis!r}")
     preis = float(roh_preis)
@@ -125,7 +147,7 @@ def aus_speicher(rohdaten: Mapping[str, Any] | None) -> Extremwert | None:
     # als Rekord nicht wieder eingesetzt.
     if not PLAUSIBEL_MIN <= preis <= PLAUSIBEL_MAX:
         raise ValueError(
-            f"Gespeicherter Extremwert {preis} €/1.000 kg liegt außerhalb des "
+            f"Gespeicherter Extremwert {preis} je 1.000 kg liegt außerhalb des "
             f"plausiblen Bereichs ({PLAUSIBEL_MIN:.0f}–{PLAUSIBEL_MAX:.0f})."
         )
 
@@ -143,7 +165,7 @@ def aus_speicher(rohdaten: Mapping[str, Any] | None) -> Extremwert | None:
         zeiten[feld] = wert
 
     return Extremwert(
-        euro_pro_tonne=preis,
+        preis_pro_tonne=preis,
         gesehen_am=zeiten["gesehen_am"],
         beobachtet_seit=zeiten["beobachtet_seit"],
     )

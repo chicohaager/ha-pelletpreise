@@ -12,12 +12,18 @@ mit hinein — eine hinzugerechnete Konstante, die im Sensor wie ein Messwert
 aussieht, ist ein Fehler, keine Bequemlichkeit.
 
 Die Einblaspauschale gilt **nur für lose Ware**. Die Quelle sagt das im
-Kleingedruckten unter ihrem Preis selbst:
+Kleingedruckten unter ihrem Preis selbst — wortgleich auf allen drei
+Landesseiten (de/at/ch, nachgemessen am 09.08.2026):
 
     "Preis inkl. MwSt. und Lieferung (lose Pellets zzgl. Einblaspauschale)."
 
 Sackware wird auf Paletten geliefert und nicht eingeblasen; dort wäre der
 Zuschlag frei erfunden.
+
+Die Währung wird durchgereicht, nie angenommen: Schweizer Preise stehen in
+CHF. Eine Funktion, die intern "€" anhängt, würde einen CHF-Betrag beschriften,
+ohne dass es irgendwo auffiele — genau die Sorte stiller Fehler, gegen die
+dieses Modul überhaupt getrennt liegt.
 """
 
 from __future__ import annotations
@@ -26,9 +32,16 @@ from .const import MAX_EINBLASPAUSCHALE, MIN_EINBLASPAUSCHALE
 from .parser import REFERENZMENGE_KG
 
 
-def euro(betrag: float) -> str:
-    """Formatiere einen Betrag deutsch, für die Anzeige in Attributen."""
-    return f"{betrag:.2f}".replace(".", ",") + " €"
+def betrag_text(wert: float, waehrung: str) -> str:
+    """Formatiere einen Betrag für die Anzeige in Attributen.
+
+    Dezimaltrennzeichen nach Landesbrauch: im deutschsprachigen Raum das
+    Komma, in der Schweiz der Punkt (dort schreibt man 522.12 CHF). Die
+    Währung kommt von der Quelle und wird hier nur angehängt.
+    """
+    if waehrung == "CHF":
+        return f"{wert:.2f} CHF"
+    return f"{wert:.2f}".replace(".", ",") + f" {waehrung}"
 
 
 def pruefe_einblaspauschale(betrag: float) -> float:
@@ -47,25 +60,26 @@ def pruefe_einblaspauschale(betrag: float) -> float:
         ) from err
     if not MIN_EINBLASPAUSCHALE <= wert <= MAX_EINBLASPAUSCHALE:
         raise ValueError(
-            f"Einblaspauschale: {wert} € liegt außerhalb des zulässigen "
-            f"Bereichs ({MIN_EINBLASPAUSCHALE:.0f}–{MAX_EINBLASPAUSCHALE:.0f} €). "
+            f"Einblaspauschale: {wert} liegt außerhalb des zulässigen "
+            f"Bereichs ({MIN_EINBLASPAUSCHALE:.0f}–{MAX_EINBLASPAUSCHALE:.0f}). "
             "Der Bereich ist keine Marktaussage, sondern eine Tippfehlersperre: "
             "ein verrutschtes Komma soll nicht unbemerkt im Gesamtpreis landen."
         )
     return wert
 
 
-def warenwert_euro(euro_pro_tonne: float, menge_kg: int) -> float:
+def warenwert(preis_pro_tonne: float, menge_kg: int) -> float:
     """Der reine Warenwert der Bestellmenge, ohne jeden Zuschlag.
 
     Lineare Hochrechnung vom Referenzpreis der Quelle — siehe
-    ``berechnungstext``.
+    ``berechnungstext``. Währungsblind: der Wert steht in derselben Währung
+    wie der übergebene Preis.
     """
-    return round(euro_pro_tonne * menge_kg / 1000, 2)
+    return round(preis_pro_tonne * menge_kg / 1000, 2)
 
 
-def gesamtpreis_euro(
-    euro_pro_tonne: float, menge_kg: int, einblaspauschale_eur: float = 0.0
+def gesamtpreis(
+    preis_pro_tonne: float, menge_kg: int, einblaspauschale: float = 0.0
 ) -> float:
     """Warenwert plus Einblaspauschale.
 
@@ -76,13 +90,15 @@ def gesamtpreis_euro(
     springt.
     """
     return round(
-        warenwert_euro(euro_pro_tonne, menge_kg)
-        + pruefe_einblaspauschale(einblaspauschale_eur),
+        warenwert(preis_pro_tonne, menge_kg)
+        + pruefe_einblaspauschale(einblaspauschale),
         2,
     )
 
 
-def berechnungstext(menge_kg: int, einblaspauschale_eur: float = 0.0) -> str:
+def berechnungstext(
+    menge_kg: int, einblaspauschale: float = 0.0, waehrung: str = "€"
+) -> str:
     """Sagt im Klartext, wie der Gesamtpreis zustande kam.
 
     Landet als Attribut ``berechnung`` am Sensor. Der Text nennt die Pauschale
@@ -90,16 +106,16 @@ def berechnungstext(menge_kg: int, einblaspauschale_eur: float = 0.0) -> str:
     heizpellets24.de gelesenen Wert hält.
     """
     text = f"Referenzpreis × {menge_kg} kg ÷ 1000"
-    if einblaspauschale_eur:
-        text += f" + {euro(einblaspauschale_eur)} Einblaspauschale"
+    if einblaspauschale:
+        text += f" + {betrag_text(einblaspauschale, waehrung)} Einblaspauschale"
     text += (
         " — lineare Hochrechnung. Die Quelle nennt ihren Preis für "
         f"{REFERENZMENGE_KG} kg Gesamtabnahme; tatsächliche Angebote sind "
         "mengenabhängig."
     )
-    if einblaspauschale_eur:
+    if einblaspauschale:
         text += (
             " Die Einblaspauschale ist der von dir eingetragene Betrag und "
-            "stammt nicht von heizpellets24.de."
+            "stammt nicht von heizpellets24."
         )
     return text

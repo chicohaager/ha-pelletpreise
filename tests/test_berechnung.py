@@ -23,10 +23,10 @@ import pytest
 
 from pelletpreise.berechnung import (  # noqa: E402
     berechnungstext,
-    euro,
-    gesamtpreis_euro,
+    betrag_text,
+    gesamtpreis,
     pruefe_einblaspauschale,
-    warenwert_euro,
+    warenwert,
 )
 from pelletpreise.const import (  # noqa: E402
     DEFAULT_EINBLASPAUSCHALE,
@@ -50,7 +50,7 @@ SENSOR_PY = (
 
 
 @pytest.mark.parametrize(
-    ("euro_pro_tonne", "menge_kg", "erwartet"),
+    ("preis_pro_tonne", "menge_kg", "erwartet"),
     [
         (BAYERN_LOSE, 6000, 2402.28),  # 400,38 × 6 = 2402,28
         (BAYERN_LOSE, 3000, 1201.14),
@@ -58,8 +58,8 @@ SENSOR_PY = (
         (BAYERN_LOSE, 500, 200.19),
     ],
 )
-def test_warenwert_ist_lineare_hochrechnung(euro_pro_tonne, menge_kg, erwartet):
-    assert warenwert_euro(euro_pro_tonne, menge_kg) == erwartet
+def test_warenwert_ist_lineare_hochrechnung(preis_pro_tonne, menge_kg, erwartet):
+    assert warenwert(preis_pro_tonne, menge_kg) == erwartet
 
 
 # ---------------------------------------------------------------------------
@@ -76,8 +76,8 @@ def test_ohne_pauschale_bleibt_der_gesamtpreis_unveraendert():
     Erweiterung.
     """
     assert DEFAULT_EINBLASPAUSCHALE == 0.0
-    assert gesamtpreis_euro(BAYERN_LOSE, 6000, DEFAULT_EINBLASPAUSCHALE) == 2402.28
-    assert gesamtpreis_euro(BAYERN_LOSE, 6000) == warenwert_euro(BAYERN_LOSE, 6000)
+    assert gesamtpreis(BAYERN_LOSE, 6000, DEFAULT_EINBLASPAUSCHALE) == 2402.28
+    assert gesamtpreis(BAYERN_LOSE, 6000) == warenwert(BAYERN_LOSE, 6000)
 
 
 @pytest.mark.parametrize(
@@ -90,7 +90,7 @@ def test_ohne_pauschale_bleibt_der_gesamtpreis_unveraendert():
     ],
 )
 def test_pauschale_wird_einmal_auf_die_bestellung_geschlagen(pauschale, erwartet):
-    assert gesamtpreis_euro(BAYERN_LOSE, 6000, pauschale) == erwartet
+    assert gesamtpreis(BAYERN_LOSE, 6000, pauschale) == erwartet
 
 
 def test_pauschale_haengt_nicht_an_der_bestellmenge():
@@ -101,7 +101,7 @@ def test_pauschale_haengt_nicht_an_der_bestellmenge():
     Bestellmenge ändert.
     """
     for menge in (500, 3000, 6000, 30000):
-        aufschlag = gesamtpreis_euro(BAYERN_LOSE, menge, 45.0) - warenwert_euro(
+        aufschlag = gesamtpreis(BAYERN_LOSE, menge, 45.0) - warenwert(
             BAYERN_LOSE, menge
         )
         assert round(aufschlag, 2) == 45.0
@@ -138,7 +138,7 @@ def test_nichtzahlen_werden_abgelehnt(unsinn):
 def test_gesamtpreis_prueft_die_pauschale_mit():
     """Der Fehler muss auch dann kommen, wenn niemand vorher separat prüft."""
     with pytest.raises(ValueError, match="Einblaspauschale"):
-        gesamtpreis_euro(BAYERN_LOSE, 6000, -5.0)
+        gesamtpreis(BAYERN_LOSE, 6000, -5.0)
 
 
 # ---------------------------------------------------------------------------
@@ -146,10 +146,20 @@ def test_gesamtpreis_prueft_die_pauschale_mit():
 # ---------------------------------------------------------------------------
 
 
-def test_euro_formatiert_deutsch():
-    assert euro(45.0) == "45,00 €"
-    assert euro(44.9) == "44,90 €"
-    assert euro(0) == "0,00 €"
+def test_betrag_formatiert_deutsch():
+    assert betrag_text(45.0, "€") == "45,00 €"
+    assert betrag_text(44.9, "€") == "44,90 €"
+    assert betrag_text(0, "€") == "0,00 €"
+
+
+def test_betrag_in_franken_traegt_kein_eurozeichen():
+    """Die Währung kommt von der Quelle und wird nicht angehängt, wie es passt.
+
+    Ein Schweizer Betrag mit " €" dahinter wäre nirgends auffällig — 45 sieht
+    in beiden Währungen gleich plausibel aus.
+    """
+    assert betrag_text(45.0, "CHF") == "45.00 CHF"
+    assert "€" not in betrag_text(522.12, "CHF")
 
 
 def test_text_ohne_pauschale_erwaehnt_sie_nicht():
@@ -167,7 +177,14 @@ def test_text_mit_pauschale_nennt_betrag_und_herkunft():
     """
     text = berechnungstext(6000, 45.0)
     assert "+ 45,00 € Einblaspauschale" in text
-    assert "stammt nicht von heizpellets24.de" in text
+    assert "stammt nicht von heizpellets24" in text
+
+
+def test_text_uebernimmt_die_waehrung_des_eintrags():
+    """Sonst stünde am Schweizer Sensor eine Rechnung mit Eurobeträgen."""
+    text = berechnungstext(6000, 45.0, "CHF")
+    assert "+ 45.00 CHF Einblaspauschale" in text
+    assert "€" not in text
 
 
 # ---------------------------------------------------------------------------

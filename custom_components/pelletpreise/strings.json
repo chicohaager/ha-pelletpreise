@@ -3,14 +3,24 @@
     "step": {
       "user": {
         "title": "Pelletpreise einrichten",
-        "description": "Wähle die Region, deren Marktpreis beobachtet werden soll.\n\nDie Preise stammen von heizpellets24.de und gelten inklusive Mehrwertsteuer und Lieferung. Bezugsgröße der Quelle ist eine Gesamtabnahme von 6.000 kg.",
+        "description": "Für welches Land sollen die Marktpreise beobachtet werden?\n\nDie Preise stammen von heizpellets24 (heizpellets24.de, .at bzw. .ch) und gelten inklusive Mehrwertsteuer und Lieferung. Bezugsgröße der Quelle ist eine Gesamtabnahme von 6.000 kg. Schweizer Preise stehen in CHF.",
+        "data": {
+          "land": "Land"
+        },
+        "data_description": {
+          "land": "Bestimmt zugleich die Auswahl im nächsten Schritt und die Währung der Sensoren."
+        }
+      },
+      "region": {
+        "title": "Region wählen",
+        "description": "Land: {land}\nQuelle: {quelle}\nWährung: {waehrung}\n\nWähle die Region, deren Marktpreis beobachtet werden soll.",
         "data": {
           "region": "Region",
           "menge": "Bestellmenge",
           "einblaspauschale": "Einblaspauschale"
         },
         "data_description": {
-          "region": "Für Bundesländer gibt es zusätzlich einen Preis für Sackware, für Deutschland stattdessen die Drei-Jahres-Werte.",
+          "region": "Für Bundesländer gibt es zusätzlich einen Preis für Sackware, für die Landesebene stattdessen die Drei-Jahres-Werte. Für die Schweiz führt die Quelle keine Regionalpreise — dort gibt es nur den Landesdurchschnitt.",
           "menge": "Nur für die Hochrechnung des Gesamtpreises. Ändert den Marktpreis je Tonne nicht.",
           "einblaspauschale": "Was dein Händler je Lieferung fürs Einblasen berechnet. Kommt nur beim Gesamtpreis der losen Ware oben drauf — die Quelle nennt ihre Preise „zzgl. Einblaspauschale\" und lässt die Höhe offen. 0 lassen, wenn du sie nicht mitrechnen willst."
         }
@@ -27,7 +37,7 @@
     "step": {
       "init": {
         "title": "Pelletpreise anpassen",
-        "description": "Region: {region}\n\nBestellmenge und Einblaspauschale wirken sich nur auf die hochgerechneten Gesamtpreise aus, nicht auf den Marktpreis je Tonne.",
+        "description": "Region: {region}\nQuelle: {quelle}\n\nBestellmenge und Einblaspauschale wirken sich nur auf die hochgerechneten Gesamtpreise aus, nicht auf den Marktpreis je Tonne.\n\nDer Bundesland-Vergleich kostet je Aktualisierung {anzahl} zusätzliche Seitenabrufe, weil die Landesseite die Bundesland-Tabelle nicht mitliefert.",
         "data": {
           "menge": "Bestellmenge",
           "einblaspauschale": "Einblaspauschale",
@@ -36,7 +46,7 @@
         "data_description": {
           "menge": "Nur für die Hochrechnung des Gesamtpreises. Ändert den Marktpreis je Tonne nicht.",
           "einblaspauschale": "Zuschlag je Lieferung, nur für lose Ware. Sackware wird auf Paletten geliefert und nicht eingeblasen.",
-          "bundesland_vergleich": "Legt zwei Sensoren für das günstigste und das teuerste Bundesland an. Kostet je Aktualisierung 16 zusätzliche Seitenabrufe bei heizpellets24.de, weil die Deutschland-Seite die Bundesland-Tabelle nicht mitliefert. Nur für die Region Deutschland."
+          "bundesland_vergleich": "Legt zwei Sensoren für das günstigste und das teuerste Bundesland an. Nur im Eintrag für die Landesebene und nur dort, wo die Quelle Bundesländer führt."
         }
       }
     }

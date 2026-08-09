@@ -27,28 +27,53 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from .const import (
     CONF_BUNDESLAND_VERGLEICH,
     CONF_EINBLASPAUSCHALE,
+    CONF_LAND,
     CONF_MENGE,
     CONF_REGION,
     DEFAULT_BUNDESLAND_VERGLEICH,
     DEFAULT_EINBLASPAUSCHALE,
     DEFAULT_MENGE,
     DOMAIN,
+    LAENDER,
+    LAND_DE,
     MAX_EINBLASPAUSCHALE,
     MAX_MENGE,
     MIN_EINBLASPAUSCHALE,
     MIN_MENGE,
-    REGION_DEUTSCHLAND,
     REGIONEN,
+    Land,
+    ist_landesebene,
+    land_von_region,
 )
 from .coordinator import preise_abrufen
 
 
-def _regionsauswahl() -> SelectSelector:
+def _landauswahl() -> SelectSelector:
+    """Das Land zuerst — es entscheidet über Regionsliste **und** Währung.
+
+    Zwei Schritte statt einer langen Liste: Deutschland, Österreich und die
+    Schweiz zusammen ergäben 27 Einträge in einem Aufklappmenü, in dem
+    „Salzburg" und „Sachsen" direkt untereinander stünden. Wer sich dort
+    verklickt, bekommt keinen Fehler, sondern klaglos den Preis des falschen
+    Landes — in einem Fall sogar in einer anderen Währung.
+    """
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[
+                SelectOptionDict(value=land.code, label=land.name)
+                for land in LAENDER.values()
+            ],
+            mode=SelectSelectorMode.LIST,
+        )
+    )
+
+
+def _regionsauswahl(land: Land) -> SelectSelector:
     return SelectSelector(
         SelectSelectorConfig(
             options=[
                 SelectOptionDict(value=slug, label=name)
-                for slug, name in REGIONEN.items()
+                for slug, name in land.regionen.items()
             ],
             mode=SelectSelectorMode.DROPDOWN,
         )
@@ -67,12 +92,16 @@ def _mengenauswahl() -> NumberSelector:
     )
 
 
-def _pauschalenauswahl() -> NumberSelector:
+def _pauschalenauswahl(waehrung: str) -> NumberSelector:
     """Eingabefeld für die Einblaspauschale.
 
     Schrittweite 0,01, weil Händler krumme Beträge nehmen (44,90 € ist kein
     Sonderfall). Die Vorgabe bleibt 0 — welchen Betrag der eigene Händler
     verlangt, steht auf dessen Angebot und nicht auf der Quellseite.
+
+    Die Einheit am Feld ist die Währung des gewählten Landes: bei einem
+    Schweizer Eintrag wird der Betrag zu einem CHF-Preis addiert, und ein
+    Eurozeichen am Eingabefeld würde genau die falsche Erwartung wecken.
     """
     return NumberSelector(
         NumberSelectorConfig(
@@ -80,7 +109,7 @@ def _pauschalenauswahl() -> NumberSelector:
             max=MAX_EINBLASPAUSCHALE,
             step=0.01,
             mode=NumberSelectorMode.BOX,
-            unit_of_measurement="€",
+            unit_of_measurement=waehrung,
         )
     )
 
@@ -90,9 +119,28 @@ class PelletpreiseConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 2
 
+    def __init__(self) -> None:
+        self._land: Land = LAENDER[LAND_DE]
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Schritt 1: das Land."""
+        if user_input is not None:
+            self._land = LAENDER[user_input[CONF_LAND]]
+            return await self.async_step_region()
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_LAND, default=LAND_DE): _landauswahl()}
+            ),
+        )
+
+    async def async_step_region(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Schritt 2: Region, Bestellmenge und Einblaspauschale."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -113,6 +161,11 @@ class PelletpreiseConfigFlow(ConfigFlow, domain=DOMAIN):
             if fehler is None:
                 return self.async_create_entry(
                     title=f"Pelletpreise {REGIONEN[region]}",
+                    # Das Land steht **nicht** mit im Eintrag: es steckt
+                    # eindeutig in der Region (`land_von_region`). Zwei
+                    # Speicherorte für dieselbe Tatsache können auseinander
+                    # laufen, und dann zeigte der Eintrag Preise der einen
+                    # Domain mit der Währung der anderen.
                     data={CONF_REGION: region},
                     options={
                         CONF_MENGE: menge,
@@ -121,21 +174,34 @@ class PelletpreiseConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
             errors["base"] = "cannot_connect"
             return self.async_show_form(
-                step_id="user",
+                step_id="region",
                 data_schema=self._schema(user_input),
                 errors=errors,
-                description_placeholders={"fehler": fehler},
+                description_placeholders=self._platzhalter(fehler),
             )
 
-        return self.async_show_form(step_id="user", data_schema=self._schema(None))
+        return self.async_show_form(
+            step_id="region",
+            data_schema=self._schema(None),
+            description_placeholders=self._platzhalter(None),
+        )
+
+    def _platzhalter(self, fehler: str | None) -> dict[str, str]:
+        return {
+            "land": self._land.name,
+            "waehrung": self._land.waehrung,
+            "quelle": self._land.host,
+            "fehler": fehler or "",
+        }
 
     def _schema(self, vorgabe: dict[str, Any] | None) -> vol.Schema:
         vorgabe = vorgabe or {}
         return vol.Schema(
             {
                 vol.Required(
-                    CONF_REGION, default=vorgabe.get(CONF_REGION, vol.UNDEFINED)
-                ): _regionsauswahl(),
+                    CONF_REGION,
+                    default=vorgabe.get(CONF_REGION, self._land.landesregion),
+                ): _regionsauswahl(self._land),
                 vol.Required(
                     CONF_MENGE, default=vorgabe.get(CONF_MENGE, DEFAULT_MENGE)
                 ): _mengenauswahl(),
@@ -144,7 +210,7 @@ class PelletpreiseConfigFlow(ConfigFlow, domain=DOMAIN):
                     default=vorgabe.get(
                         CONF_EINBLASPAUSCHALE, DEFAULT_EINBLASPAUSCHALE
                     ),
-                ): _pauschalenauswahl(),
+                ): _pauschalenauswahl(self._land.waehrung),
             }
         )
 
@@ -155,7 +221,10 @@ class PelletpreiseConfigFlow(ConfigFlow, domain=DOMAIN):
 
         Bewusst über dieselbe Funktion wie im laufenden Betrieb: eine
         Einrichtungsprüfung, die einen anderen Weg nimmt als die spätere
-        Abfrage, prüft nicht das, was danach passiert.
+        Abfrage, prüft nicht das, was danach passiert. Sie deckt damit auch
+        den Fall ab, dass eine Region gerade gar keinen Preis führt — dann
+        entsteht kein Eintrag mit dauerhaft leeren Sensoren, sondern eine
+        Fehlermeldung, die den Grund nennt.
         """
         try:
             await preise_abrufen(
@@ -184,14 +253,23 @@ class PelletpreiseOptionsFlow(OptionsFlow):
     """
 
     @property
-    def _ist_deutschland(self) -> bool:
-        """Nur im Deutschland-Eintrag ergibt der Bundesland-Vergleich Sinn.
+    def _region(self) -> str:
+        return self.config_entry.data.get(CONF_REGION, "")
+
+    @property
+    def _land(self) -> Land:
+        return land_von_region(self._region)
+
+    @property
+    def _hat_vergleich(self) -> bool:
+        """Nur im Landeseintrag mit Unterregionen ergibt der Vergleich Sinn.
 
         Der Schalter wird deshalb sonst gar nicht erst gezeigt: eine Option,
-        die für 16 von 17 Regionen nichts bewirkt, ist ein Versprechen, das
-        der Dialog nicht halten kann.
+        die nichts bewirkt, ist ein Versprechen, das der Dialog nicht halten
+        kann. Im Schweizer Eintrag fehlt er ebenfalls — die Quelle führt dort
+        keine Regionalpreise, es gäbe also nichts zu vergleichen.
         """
-        return self.config_entry.data.get(CONF_REGION) == REGION_DEUTSCHLAND
+        return ist_landesebene(self._region) and bool(self._land.unterregionen)
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -203,7 +281,7 @@ class PelletpreiseOptionsFlow(OptionsFlow):
                     user_input.get(CONF_EINBLASPAUSCHALE, DEFAULT_EINBLASPAUSCHALE)
                 ),
             }
-            if self._ist_deutschland:
+            if self._hat_vergleich:
                 optionen[CONF_BUNDESLAND_VERGLEICH] = bool(
                     user_input.get(
                         CONF_BUNDESLAND_VERGLEICH, DEFAULT_BUNDESLAND_VERGLEICH
@@ -226,9 +304,9 @@ class PelletpreiseOptionsFlow(OptionsFlow):
             vol.Required(CONF_MENGE, default=aktuelle_menge): _mengenauswahl(),
             vol.Required(
                 CONF_EINBLASPAUSCHALE, default=aktuelle_pauschale
-            ): _pauschalenauswahl(),
+            ): _pauschalenauswahl(self._land.waehrung),
         }
-        if self._ist_deutschland:
+        if self._hat_vergleich:
             felder[
                 vol.Required(
                     CONF_BUNDESLAND_VERGLEICH,
@@ -242,8 +320,8 @@ class PelletpreiseOptionsFlow(OptionsFlow):
             step_id="init",
             data_schema=vol.Schema(felder),
             description_placeholders={
-                "region": REGIONEN.get(
-                    self.config_entry.data.get(CONF_REGION, ""), "?"
-                )
+                "region": REGIONEN.get(self._region, "?"),
+                "anzahl": str(len(self._land.unterregionen)),
+                "quelle": self._land.host,
             },
         )

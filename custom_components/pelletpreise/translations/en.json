@@ -3,14 +3,24 @@
     "step": {
       "user": {
         "title": "Set up pellet prices",
-        "description": "Choose the region whose market price you want to track.\n\nPrices come from heizpellets24.de and include VAT and delivery. The source quotes them for a total order of 6,000 kg.",
+        "description": "Which country's market prices do you want to track?\n\nPrices come from heizpellets24 (heizpellets24.de, .at or .ch) and include VAT and delivery. The source quotes them for a total order of 6,000 kg. Swiss prices are in CHF.",
+        "data": {
+          "land": "Country"
+        },
+        "data_description": {
+          "land": "Determines both the choices in the next step and the currency of the sensors."
+        }
+      },
+      "region": {
+        "title": "Choose a region",
+        "description": "Country: {land}\nSource: {quelle}\nCurrency: {waehrung}\n\nChoose the region whose market price you want to track.",
         "data": {
           "region": "Region",
           "menge": "Order quantity",
           "einblaspauschale": "Blow-in fee"
         },
         "data_description": {
-          "region": "German federal states also provide a bagged-goods price; Germany provides three-year figures instead.",
+          "region": "Federal states also provide a bagged-goods price; the country level provides three-year figures instead. For Switzerland the source carries no regional prices — only the national average.",
           "menge": "Only used to extrapolate the total price. It does not change the market price per tonne.",
           "einblaspauschale": "What your supplier charges per delivery for blowing the pellets in. It is added to the bulk total price only — the source quotes its prices \"plus blow-in fee\" without naming an amount. Leave at 0 to ignore it."
         }
@@ -27,7 +37,7 @@
     "step": {
       "init": {
         "title": "Adjust pellet prices",
-        "description": "Region: {region}\n\nOrder quantity and blow-in fee only affect the extrapolated total prices, not the market price per tonne.",
+        "description": "Region: {region}\nSource: {quelle}\n\nOrder quantity and blow-in fee only affect the extrapolated total prices, not the market price per tonne.\n\nComparing federal states costs {anzahl} extra page requests per update, because the country page does not ship the state table.",
         "data": {
           "menge": "Order quantity",
           "einblaspauschale": "Blow-in fee",
@@ -36,7 +46,7 @@
         "data_description": {
           "menge": "Only used to extrapolate the total price. It does not change the market price per tonne.",
           "einblaspauschale": "Surcharge per delivery, bulk goods only. Bagged pellets are delivered on pallets and are not blown in.",
-          "bundesland_vergleich": "Adds two sensors for the cheapest and the most expensive federal state. Costs 16 extra page requests per update because the Germany page does not ship the state table. Germany region only."
+          "bundesland_vergleich": "Adds two sensors for the cheapest and the most expensive federal state. Only in the country-level entry, and only where the source carries federal states."
         }
       }
     }
@@ -49,26 +59,66 @@
   },
   "entity": {
     "sensor": {
-      "lose_tonne": { "name": "Bulk" },
-      "lose_kg": { "name": "Bulk per kg" },
-      "lose_gesamt": { "name": "Bulk total price" },
-      "lose_aenderung_woche": { "name": "Bulk change vs. last week" },
-      "sackware_tonne": { "name": "Bagged" },
-      "sackware_kg": { "name": "Bagged per kg" },
-      "sackware_gesamt": { "name": "Bagged total price" },
-      "sackware_aenderung_woche": { "name": "Bagged change vs. last week" },
-      "tief_3jahre": { "name": "3-year low" },
-      "hoch_3jahre": { "name": "3-year high" },
-      "schnitt_3jahre": { "name": "3-year average" },
-      "differenz_3monate": { "name": "Change vs. 3 months ago" },
-      "lose_tief_beobachtet": { "name": "Bulk lowest price (observed)" },
-      "lose_hoch_beobachtet": { "name": "Bulk highest price (observed)" },
-      "sackware_tief_beobachtet": { "name": "Bagged lowest price (observed)" },
-      "sackware_hoch_beobachtet": { "name": "Bagged highest price (observed)" },
-      "guenstigstes_bundesland_lose": { "name": "Cheapest state, bulk" },
-      "teuerstes_bundesland_lose": { "name": "Most expensive state, bulk" },
-      "guenstigstes_bundesland_sackware": { "name": "Cheapest state, bagged" },
-      "teuerstes_bundesland_sackware": { "name": "Most expensive state, bagged" }
+      "lose_tonne": {
+        "name": "Bulk"
+      },
+      "lose_kg": {
+        "name": "Bulk per kg"
+      },
+      "lose_gesamt": {
+        "name": "Bulk total price"
+      },
+      "lose_aenderung_woche": {
+        "name": "Bulk change vs. last week"
+      },
+      "sackware_tonne": {
+        "name": "Bagged"
+      },
+      "sackware_kg": {
+        "name": "Bagged per kg"
+      },
+      "sackware_gesamt": {
+        "name": "Bagged total price"
+      },
+      "sackware_aenderung_woche": {
+        "name": "Bagged change vs. last week"
+      },
+      "tief_3jahre": {
+        "name": "3-year low"
+      },
+      "hoch_3jahre": {
+        "name": "3-year high"
+      },
+      "schnitt_3jahre": {
+        "name": "3-year average"
+      },
+      "differenz_3monate": {
+        "name": "Change vs. 3 months ago"
+      },
+      "lose_tief_beobachtet": {
+        "name": "Bulk lowest price (observed)"
+      },
+      "lose_hoch_beobachtet": {
+        "name": "Bulk highest price (observed)"
+      },
+      "sackware_tief_beobachtet": {
+        "name": "Bagged lowest price (observed)"
+      },
+      "sackware_hoch_beobachtet": {
+        "name": "Bagged highest price (observed)"
+      },
+      "guenstigstes_bundesland_lose": {
+        "name": "Cheapest state, bulk"
+      },
+      "teuerstes_bundesland_lose": {
+        "name": "Most expensive state, bulk"
+      },
+      "guenstigstes_bundesland_sackware": {
+        "name": "Cheapest state, bagged"
+      },
+      "teuerstes_bundesland_sackware": {
+        "name": "Most expensive state, bagged"
+      }
     }
   }
 }
